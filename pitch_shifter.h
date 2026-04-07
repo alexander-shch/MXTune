@@ -18,6 +18,7 @@
 
 #ifndef __PITCH_SHIFTER_H__
 #define __PITCH_SHIFTER_H__
+#include <cstdint>
 #include "ring_buffer.h"
 
 class pitch_shifter

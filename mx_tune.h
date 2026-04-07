@@ -18,6 +18,7 @@
 
 #ifndef __AUTOTALENT2_H__
 #define __AUTOTALENT2_H__
+#include <cstdint>
 #include <vector>
 #include "ring_buffer.h"
 #include "pitch_detector.h"
