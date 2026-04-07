@@ -10,7 +10,45 @@ permissions:
   contents: write
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Bump the patch version in VERSION, commit it back to master, and expose
+  # the new version string to downstream jobs.
+  # The commit uses [skip ci] so it doesn't re-trigger this workflow.
+  # Pushes made with GITHUB_TOKEN also don't trigger new workflow runs.
+  # ---------------------------------------------------------------------------
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          CURRENT=$(cat VERSION | tr -d '[:space:]')
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW_VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+          echo "$NEW_VERSION" > VERSION
+          echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+          echo "Bumped ${CURRENT} → ${NEW_VERSION}"
+
+      - name: Commit and push bumped version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          git commit -m "chore: bump version to $(cat VERSION) [skip ci]"
+          git push origin master
+
+  # ---------------------------------------------------------------------------
+  # Build on all three platforms using the bumped version from prepare
+  # ---------------------------------------------------------------------------
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -28,13 +66,14 @@ jobs:
       run:
         shell: ${{ matrix.name == 'windows' && 'msys2 {0}' || 'bash' }}
 
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      PLUGIN_VERSION: ${{ needs.prepare.outputs.version }}
 
-      - name: Read version
-        id: version
-        shell: bash
-        run: echo "PLUGIN_VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_ENV
+    steps:
+      # Checkout master so we get the bumped VERSION file
+      - uses: actions/checkout@v4
+        with:
+          ref: master
 
       # -----------------------------------------------------------------------
       # Linux — apt packages
@@ -157,7 +196,7 @@ jobs:
           "$PROJUCER" --resave JUCE/mx_tune.jucer
 
       # -----------------------------------------------------------------------
-      # CMake build — Linux & macOS
+      # CMake build
       # -----------------------------------------------------------------------
       - name: Build (Linux)
         if: matrix.name == 'linux'
@@ -183,7 +222,7 @@ jobs:
           make -j$(nproc)
 
       # -----------------------------------------------------------------------
-      # Package
+      # Package into VST3 bundles
       # -----------------------------------------------------------------------
       - name: Package (Linux)
         if: matrix.name == 'linux'
@@ -191,9 +230,7 @@ jobs:
           BUNDLE="mx_tune-${PLUGIN_VERSION}.vst3"
           mkdir -p "package/${BUNDLE}/Contents/x86_64-linux"
           cp build-cmake/libmx_tune.so "package/${BUNDLE}/Contents/x86_64-linux/mx_tune.so"
-          cd package
-          zip -r "../MXTune-${PLUGIN_VERSION}-linux.zip" "${BUNDLE}"
-          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-linux.zip" >> $GITHUB_ENV
+          cd package && zip -r "../MXTune-${PLUGIN_VERSION}-linux.zip" "${BUNDLE}"
 
       - name: Package (macOS)
         if: matrix.name == 'macos'
@@ -222,7 +259,6 @@ jobs:
           printf "BNDLMXTn" > "package/${BUNDLE}/Contents/PkgInfo"
           codesign --force --sign - "package/${BUNDLE}"
           cd package && zip -r "../MXTune-${PLUGIN_VERSION}-macos.zip" "${BUNDLE}"
-          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-macos.zip" >> $GITHUB_ENV
 
       - name: Package (Windows)
         if: matrix.name == 'windows'
@@ -232,57 +268,38 @@ jobs:
           mkdir -p "$BUNDLE_DIR"
           cp build-cmake/libmx_tune.dll "${BUNDLE_DIR}/mx_tune.vst3"
           cd package && zip -r "../MXTune-${PLUGIN_VERSION}-windows.zip" "${BUNDLE}"
-          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-windows.zip" >> $GITHUB_ENV
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: MXTune-${{ matrix.name }}
-          path: ${{ env.ARTIFACT }}
+          path: MXTune-${{ env.PLUGIN_VERSION }}-${{ matrix.name }}.zip
 
-  # -------------------------------------------------------------------------
-  # Release — always runs after all builds succeed on master
-  # Uses VERSION file as the tag; re-pushing the same version updates
-  # the existing release assets in place.
-  # -------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # Publish GitHub Release with all three platform zips
+  # ---------------------------------------------------------------------------
   release:
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Read version
-        run: echo "PLUGIN_VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_ENV
-
-      - name: Check if version tag already exists
-        id: check_tag
-        run: |
-          if git ls-remote --tags origin "refs/tags/v${PLUGIN_VERSION}" | grep -q .; then
-            echo "Tag v${PLUGIN_VERSION} already exists — skipping release."
-            echo "is_new=false" >> $GITHUB_OUTPUT
-          else
-            echo "Tag v${PLUGIN_VERSION} is new — proceeding with release."
-            echo "is_new=true" >> $GITHUB_OUTPUT
-          fi
+          ref: master
 
       - name: Download all artifacts
-        if: steps.check_tag.outputs.is_new == 'true'
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
           merge-multiple: true
 
       - name: Create GitHub Release
-        if: steps.check_tag.outputs.is_new == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.PLUGIN_VERSION }}
-          name: MXTune v${{ env.PLUGIN_VERSION }}
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: MXTune v${{ needs.prepare.outputs.version }}
           body: |
-            ## MXTune v${{ env.PLUGIN_VERSION }}
+            ## MXTune v${{ needs.prepare.outputs.version }}
 
             ### Installation
 
