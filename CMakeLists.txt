@@ -124,7 +124,6 @@ add_definitions(-fPIC)
 add_definitions(-Wreturn-type)
 add_definitions(-Wsign-compare)
 add_definitions(-Wuninitialized)
-add_definitions(-Wno-non-virtual-dtor)
 add_definitions(-Wno-unused-parameter)
 add_definitions(
     -DJUCE_MODAL_LOOPS_PERMITTED=1

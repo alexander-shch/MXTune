@@ -366,7 +366,7 @@ void AutotalentAudioProcessor::getStateInformation (MemoryBlock& destData)
     
     {
         kvbuf *array = kvbuf_create_array(&hooks);
-        for (std::int32_t i = 0; i < _misc_param.length(); i++)
+        for (std::size_t i = 0; i < _misc_param.length(); i++)
         {
             kvbuf_add_item_to_array(array, kvbuf_create_int8(&hooks, _misc_param.c_str()[i]));
         }
