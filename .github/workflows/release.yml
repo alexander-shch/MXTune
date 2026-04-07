@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -36,6 +37,7 @@ jobs:
   # Pushes made with GITHUB_TOKEN don't re-trigger workflow runs.
   # ---------------------------------------------------------------------------
   prepare:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.bump.outputs.version }}
