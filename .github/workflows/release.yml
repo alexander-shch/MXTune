@@ -84,7 +84,7 @@ jobs:
             build-essential cmake pkg-config
             libfftw3-dev libsamplerate0-dev
             libaubio-dev libsoundtouch-dev librubberband-dev
-            libx11-dev libxext-dev libxrandr-dev libfreetype-dev
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev libfreetype-dev
             libcurl4-openssl-dev libasound2-dev
           version: 1.0
 
@@ -116,6 +116,7 @@ jobs:
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-python3
             mingw-w64-x86_64-fftw
@@ -252,8 +253,8 @@ jobs:
         if: matrix.name == 'windows'
         run: |
           mkdir -p build-cmake && cd build-cmake
-          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles"
-          make -j$(nproc)
+          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Ninja"
+          ninja -j$(nproc)
 
       # -----------------------------------------------------------------------
       # Package into VST3 bundles

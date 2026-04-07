@@ -103,6 +103,7 @@ ENDIF ()
 #}}}}
 
 include_directories(
+    src
     JUCE/Source
 )
 
@@ -152,22 +153,22 @@ set ( C_SRCS
 set ( CXX_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/PluginGui.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/SettingGui.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/mx_tune.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/manual_tune.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_shifter_rb.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/ring_buffer.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_shifter_st.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_detector_aubio.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/mx_tune.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/manual_tune.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_shifter_rb.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/ring_buffer.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_shifter_st.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_detector_aubio.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/KeyDetectGui.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/smbPitchShift.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_shifter_smb.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_detector_talent.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/undo_redo.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/smbPitchShift.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_shifter_smb.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_detector_talent.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/undo_redo.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/PluginProcessor.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/auto_tune.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/midi_msg.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/delay.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/pitch_shifter_talent.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/auto_tune.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/midi_msg.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/delay.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/src/pitch_shifter_talent.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/PluginParameter.cpp
 )
 
@@ -266,11 +267,11 @@ ELSEIF (APPLE)
     # -iquote adds the project root to the quoted-include search path only,
     # preventing <version> (C++20 STL header) from resolving to ./VERSION
     # on macOS's case-insensitive filesystem.
-    set(CMAKE_C_FLAGS "-fvisibility=hidden -DNDEBUG -Wno-unknown-warning-option -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
-    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -std=c++17 -DNDEBUG -Wno-unknown-warning-option -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
+    set(CMAKE_C_FLAGS "-fvisibility=hidden -DNDEBUG -Wno-unknown-warning-option ${MX_TUNE_CFLAGS}")
+    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -std=c++17 -DNDEBUG -Wno-unknown-warning-option ${MX_TUNE_CFLAGS}")
 ELSEIF (UNIX)
-    set(CMAKE_C_FLAGS "-fvisibility=hidden -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
-    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
+    set(CMAKE_C_FLAGS "-fvisibility=hidden ${MX_TUNE_CFLAGS}")
+    set(CMAKE_CXX_FLAGS "-fvisibility=hidden ${MX_TUNE_CFLAGS}")
 
     IF (MXTUNE_USE_STATIC_LIB)
         set(LINK_OPTIONS ${LINK_OPTIONS} "-s -lGL -lpthread -ldl -lX11 -lXext ${FREETYPE_LDFLAGS} -Wl,--no-undefined -Wl,-Bsymbolic -Wl,-Bstatic ${MX_TUNE_LIBRARIES} -Wl,-Bdynamic -Wl,--gc-sections -Wl,--as-needed -Wl,--strip-all -Wl,--exclude-libs,ALL -fPIC")
