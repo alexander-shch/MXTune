@@ -14,6 +14,23 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Run unit tests (pure C++ logic, no plugin dependencies)
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure tests
+        run: cmake -B build-tests tests/ -Wno-dev
+
+      - name: Build tests
+        run: cmake --build build-tests --parallel
+
+      - name: Run tests
+        run: cd build-tests && ctest --output-on-failure
+
+  # ---------------------------------------------------------------------------
   # Bump the patch version in VERSION, commit it back to master, and expose
   # the new version string to downstream jobs.
   # Pushes made with GITHUB_TOKEN don't re-trigger workflow runs.
