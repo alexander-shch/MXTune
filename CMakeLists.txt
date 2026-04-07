@@ -313,6 +313,8 @@ IF (WIN32)
         shlwapi
         rpcrt4
         opengl32
+        dxgi
+        d3d11
         aubio
         fftw3f
         SoundTouch
