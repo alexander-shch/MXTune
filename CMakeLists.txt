@@ -103,7 +103,6 @@ ENDIF ()
 #}}}}
 
 include_directories(
-    .
     JUCE/Source
 )
 
