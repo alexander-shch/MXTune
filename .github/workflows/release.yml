@@ -84,7 +84,7 @@ jobs:
             build-essential cmake pkg-config
             libfftw3-dev libsamplerate0-dev
             libaubio-dev libsoundtouch-dev librubberband-dev
-            libx11-dev libxext-dev libfreetype-dev
+            libx11-dev libxext-dev libxrandr-dev libfreetype-dev
             libcurl4-openssl-dev libasound2-dev
           version: 1.0
 
