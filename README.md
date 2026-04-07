@@ -24,7 +24,11 @@ All releases: [github.com/alexander-shch/MXTune/releases](https://github.com/ale
 
 ### Installation
 
-**macOS** — extract the `.zip`, move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`, rescan in your DAW.
+**macOS** — extract the `.zip`:
+- VST3: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
+- AU: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
+
+Rescan plugins in your DAW.
 
 **Windows** — extract the `.zip`, move `mx_tune-*.vst3` to `C:\Program Files\Common Files\VST3\`, rescan in your DAW.
 
