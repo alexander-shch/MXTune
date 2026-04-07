@@ -54,6 +54,7 @@ jobs:
         include:
           - os: macos-latest
             name: macos
+          # linux and windows temporarily disabled for faster mac iteration
 
     runs-on: ${{ matrix.os }}
 
