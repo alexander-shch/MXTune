@@ -13,8 +13,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Bump the patch version in VERSION, commit it back to master, and expose
   # the new version string to downstream jobs.
-  # The commit uses [skip ci] so it doesn't re-trigger this workflow.
-  # Pushes made with GITHUB_TOKEN also don't trigger new workflow runs.
+  # Pushes made with GITHUB_TOKEN don't re-trigger workflow runs.
   # ---------------------------------------------------------------------------
   prepare:
     runs-on: ubuntu-latest
@@ -70,34 +69,42 @@ jobs:
       PLUGIN_VERSION: ${{ needs.prepare.outputs.version }}
 
     steps:
-      # Checkout master so we get the bumped VERSION file
       - uses: actions/checkout@v4
         with:
           ref: master
 
       # -----------------------------------------------------------------------
-      # Linux — apt packages
+      # Dependencies — Linux (cached apt packages)
       # -----------------------------------------------------------------------
       - name: Install dependencies (Linux)
         if: matrix.name == 'linux'
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y \
-            build-essential cmake pkg-config \
-            libfftw3-dev libsamplerate0-dev \
-            libaubio-dev libsoundtouch-dev librubberband-dev \
-            libx11-dev libxext-dev libfreetype-dev \
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: >-
+            build-essential cmake pkg-config
+            libfftw3-dev libsamplerate0-dev
+            libaubio-dev libsoundtouch-dev librubberband-dev
+            libx11-dev libxext-dev libfreetype-dev
             libcurl4-openssl-dev libasound2-dev
+          version: 1.0
 
       # -----------------------------------------------------------------------
-      # macOS — Homebrew packages
+      # Dependencies — macOS (cached Homebrew bottles)
       # -----------------------------------------------------------------------
+      - name: Cache Homebrew downloads
+        if: matrix.name == 'macos'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-fftw-aubio-soundtouch-rubberband
+          restore-keys: brew-${{ runner.os }}-
+
       - name: Install dependencies (macOS)
         if: matrix.name == 'macos'
         run: brew install pkg-config cmake fftw aubio sound-touch rubberband
 
       # -----------------------------------------------------------------------
-      # Windows — MSYS2 + MinGW-w64 packages
+      # Dependencies — Windows (MSYS2 with built-in package cache)
       # -----------------------------------------------------------------------
       - name: Set up MSYS2 (Windows)
         if: matrix.name == 'windows'
@@ -105,6 +112,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
+          cache: true
           install: >-
             mingw-w64-x86_64-toolchain
             mingw-w64-x86_64-cmake
@@ -117,42 +125,84 @@ jobs:
             zip unzip
 
       # -----------------------------------------------------------------------
-      # VST3 SDK — all platforms
+      # VST3 SDK — cached, fetched via actions/checkout (reliable on all OSes)
       # -----------------------------------------------------------------------
+      - name: Cache VST3 SDK
+        id: cache-vst3
+        uses: actions/cache@v4
+        with:
+          path: VST3_SDK
+          key: vst3sdk-v3.7.1_build_50-${{ runner.os }}
+
       - name: Clone VST3 SDK
-        run: |
-          git clone --depth 1 --branch v3.7.1_build_50 --recurse-submodules --shallow-submodules \
-            https://github.com/steinbergmedia/vst3sdk.git VST3_SDK
+        if: steps.cache-vst3.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: v3.7.1_build_50
+          path: VST3_SDK
+          submodules: recursive
+          fetch-depth: 1
 
       # -----------------------------------------------------------------------
-      # JUCE download + Projucer resave — Linux
+      # JUCE — download cached, Projucer always reruns to regenerate JuceLibraryCode
       # -----------------------------------------------------------------------
-      - name: Setup JUCE (Linux)
-        if: matrix.name == 'linux'
+      - name: Cache JUCE download
+        id: cache-juce
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: juce-7.0.5-${{ runner.os }}
+
+      - name: Download JUCE (Linux)
+        if: matrix.name == 'linux' && steps.cache-juce.outputs.cache-hit != 'true'
         run: |
           mkdir -p third_party/downloads
           curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-linux.zip" \
                -o third_party/downloads/juce-7.0.5-linux.zip
           unzip -q third_party/downloads/juce-7.0.5-linux.zip -d third_party/
-          PROJUCER="$(pwd)/third_party/JUCE/Projucer"
-          "$PROJUCER" --set-global-search-path linux defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
-          "$PROJUCER" --resave JUCE/mx_tune.jucer
 
-      # -----------------------------------------------------------------------
-      # JUCE download + Projucer resave + macOS 15+ patch — macOS
-      # -----------------------------------------------------------------------
-      - name: Setup JUCE (macOS)
-        if: matrix.name == 'macos'
+      - name: Download JUCE (macOS)
+        if: matrix.name == 'macos' && steps.cache-juce.outputs.cache-hit != 'true'
         run: |
           mkdir -p third_party/downloads
           curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-osx.zip" \
                -o third_party/downloads/juce-7.0.5-osx.zip
           unzip -q third_party/downloads/juce-7.0.5-osx.zip -d third_party/
+
+      - name: Download JUCE (Windows)
+        if: matrix.name == 'windows' && steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-windows.zip" \
+               -o third_party/downloads/juce-7.0.5-windows.zip
+          unzip -q third_party/downloads/juce-7.0.5-windows.zip -d third_party/
+
+      - name: Run Projucer (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          PROJUCER="$(pwd)/third_party/JUCE/Projucer"
+          "$PROJUCER" --set-global-search-path linux defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$PROJUCER" --resave JUCE/mx_tune.jucer
+
+      - name: Run Projucer (macOS)
+        if: matrix.name == 'macos'
+        run: |
           PROJUCER="$(pwd)/third_party/JUCE/Projucer.app/Contents/MacOS/Projucer"
           "$PROJUCER" --set-global-search-path osx defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
           "$PROJUCER" --resave JUCE/mx_tune.jucer
 
-      - name: Patch JUCE for macOS 15+ (macOS)
+      - name: Run Projucer (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          PROJUCER="$(pwd)/third_party/JUCE/Projucer.exe"
+          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$PROJUCER" --resave JUCE/mx_tune.jucer
+
+      # -----------------------------------------------------------------------
+      # macOS 15+ patch — guard removed CGWindowListCreateImage API
+      # -----------------------------------------------------------------------
+      - name: Patch JUCE for macOS 15+
         if: matrix.name == 'macos'
         run: |
           python3 - <<'PYEOF'
@@ -178,20 +228,6 @@ jobs:
           p.write_text(t)
           print('Patched: CGWindowListCreateImage guarded for macOS 15.0+')
           PYEOF
-
-      # -----------------------------------------------------------------------
-      # JUCE download + Projucer resave — Windows
-      # -----------------------------------------------------------------------
-      - name: Setup JUCE (Windows)
-        if: matrix.name == 'windows'
-        run: |
-          mkdir -p third_party/downloads
-          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-windows.zip" \
-               -o third_party/downloads/juce-7.0.5-windows.zip
-          unzip -q third_party/downloads/juce-7.0.5-windows.zip -d third_party/
-          PROJUCER="$(pwd)/third_party/JUCE/Projucer.exe"
-          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
-          "$PROJUCER" --resave JUCE/mx_tune.jucer
 
       # -----------------------------------------------------------------------
       # CMake build

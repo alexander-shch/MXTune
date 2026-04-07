@@ -192,13 +192,12 @@ set ( CXX_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/PluginParameter.cpp
 )
 
-# JUCE plugin client wrappers — treated as third-party, warnings suppressed below
-set ( JUCE_PLUGIN_CLIENT_SRCS
-    ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_utils.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_Standalone.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_VST2.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_VST3.cpp
-    ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_Unity.cpp
+# JUCE plugin client wrappers — glob so only files Projucer actually
+# generates for the configured plugin formats (VST3 only) are included.
+# VST2/Standalone/Unity are not in pluginFormats and won't be generated.
+file(GLOB JUCE_PLUGIN_CLIENT_SRCS
+    "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.mm"
 )
 
 set_source_files_properties(
