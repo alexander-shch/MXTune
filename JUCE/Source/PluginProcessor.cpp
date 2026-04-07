@@ -225,14 +225,13 @@ void AutotalentAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuf
     AudioPlayHead *play_head = getPlayHead();
     if (play_head)
     {
-        AudioPlayHead::CurrentPositionInfo result;
-        if (play_head->getCurrentPosition(result))
+        if (auto pos = play_head->getPosition())
         {
-            _cur_time = result.timeInSeconds;
-            _bpm = result.bpm;
-            _ppq_position = result.ppqPosition;
-            _time_sig_denominator = result.timeSigDenominator;
-            _is_playing = result.isPlaying;
+            if (auto t   = pos->getTimeInSeconds())  _cur_time             = *t;
+            if (auto b   = pos->getBpm())            _bpm                  = *b;
+            if (auto ppq = pos->getPpqPosition())    _ppq_position         = *ppq;
+            if (auto ts  = pos->getTimeSignature())  _time_sig_denominator = ts->denominator;
+            _is_playing = pos->getIsPlaying();
         }
     }
     
@@ -888,11 +887,10 @@ void AutotalentAudioProcessor::_record_midi_to_note(MidiBuffer& midiMessages, st
     if (_midi_record)
     {
         std::list<mx_tune::midi_msg_node> msg_list;
-        MidiBuffer::Iterator midi_iter(midiMessages);
-        MidiMessage result;
-        std::int32_t sample_position = 0;
-        while (midi_iter.getNextEvent(result, sample_position))
+        for (const auto metadata : midiMessages)
         {
+            const MidiMessage result = metadata.getMessage();
+            const std::int32_t sample_position = metadata.samplePosition;
             if (result.isNoteOn())
             {
                 mx_tune::midi_msg_node node;

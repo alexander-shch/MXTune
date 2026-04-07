@@ -528,7 +528,7 @@ void PluginGui::paint (Graphics& g)
             {
                 std::int32_t n = (i + 9 + 12 * 4) / 12;
                 char name[32];
-                sprintf(name, "%s%d", node_name[(unsigned)(i + 12 * 8) % 12], n);
+                snprintf(name, sizeof(name), "%s%d", node_name[(unsigned)(i + 12 * 8) % 12], n);
                 g.drawText(name, _draw_x - 24, y - 12, 24, 24, juce::Justification::centred, true);
             }
             else
@@ -611,11 +611,11 @@ void PluginGui::paint (Graphics& g)
             char str[32] = {0};
             if (_cur_node->time_end > _cur_node->time_start)
             {
-                sprintf(str, "%u(ms)", (std::uint32_t)((_cur_node->time_end - _cur_node->time_start) * 1000));
+                snprintf(str, sizeof(str), "%u(ms)", (std::uint32_t)((_cur_node->time_end - _cur_node->time_start) * 1000));
             }
             else
             {
-                sprintf(str, "%u(ms)", (std::uint32_t)((_cur_node->time_start - _cur_node->time_end) * 1000));
+                snprintf(str, sizeof(str), "%u(ms)", (std::uint32_t)((_cur_node->time_start - _cur_node->time_end) * 1000));
             }
 
             String text (str);
