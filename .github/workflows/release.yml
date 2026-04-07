@@ -52,9 +52,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - os: ubuntu-latest
+            name: linux
           - os: macos-latest
             name: macos
-          # linux and windows temporarily disabled for faster mac iteration
+          - os: windows-latest
+            name: windows
 
     runs-on: ${{ matrix.os }}
 
