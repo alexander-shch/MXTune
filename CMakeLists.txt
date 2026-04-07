@@ -175,10 +175,16 @@ set ( CXX_SRCS
 # JUCE plugin client wrappers — glob so only files Projucer actually
 # generates for the configured plugin formats (VST3 only) are included.
 # VST2/Standalone/Unity are not in pluginFormats and won't be generated.
-file(GLOB JUCE_PLUGIN_CLIENT_SRCS
-    "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.mm"
-)
+if(APPLE)
+    file(GLOB JUCE_PLUGIN_CLIENT_SRCS
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.mm"
+    )
+else()
+    file(GLOB JUCE_PLUGIN_CLIENT_SRCS
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_*.cpp"
+    )
+endif()
 
 set_source_files_properties(
     ${CXX_SRCS} PROPERTIES COMPILE_FLAGS
