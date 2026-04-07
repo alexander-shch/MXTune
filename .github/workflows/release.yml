@@ -121,10 +121,8 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Clone VST3 SDK
         run: |
-          git clone --recursive https://github.com/steinbergmedia/vst3sdk.git VST3_SDK
-          cd VST3_SDK
-          git checkout v3.7.1_build_50
-          git submodule update --recursive
+          git clone --depth 1 --branch v3.7.1_build_50 --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git VST3_SDK
 
       # -----------------------------------------------------------------------
       # JUCE download + Projucer resave — Linux
