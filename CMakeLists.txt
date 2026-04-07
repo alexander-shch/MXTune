@@ -8,8 +8,25 @@ cmake_minimum_required(VERSION 3.0)
 #}}}}
 
 enable_language(CXX C ASM)
-# Project name
-project(mx_tune)
+# Project name and version — edit VERSION file to cut a new release
+file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" MXTUNE_VERSION)
+string(STRIP "${MXTUNE_VERSION}" MXTUNE_VERSION)
+project(mx_tune VERSION ${MXTUNE_VERSION})
+add_definitions(-DMXTUNE_VERSION="${MXTUNE_VERSION}")
+
+# Derive a per-version VST3 plugin code so each version is treated as a
+# distinct plugin by hosts (allows multiple versions loaded simultaneously).
+# Scheme: 0x4d58MMPP  where MM = major<<4|minor, PP = patch  ('MX' prefix)
+string(REPLACE "." ";" _ver_parts "${MXTUNE_VERSION}")
+list(GET _ver_parts 0 _ver_major)
+list(GET _ver_parts 1 _ver_minor)
+list(GET _ver_parts 2 _ver_patch)
+math(EXPR MXTUNE_PLUGIN_CODE
+    "(0x4d58 * 65536) + (${_ver_major} * 4096) + (${_ver_minor} * 256) + ${_ver_patch}")
+# Override JucePlugin_Name and JucePlugin_PluginCode (both are #ifndef-guarded
+# in JucePluginDefines.h, so command-line -D definitions take precedence).
+add_definitions("-DJucePlugin_Name=\"MXTune ${MXTUNE_VERSION}\"")
+add_definitions(-DJucePlugin_PluginCode=${MXTUNE_PLUGIN_CODE})
 
 
 
@@ -64,7 +81,7 @@ ENDIF ()
     foreach(list ${AUBIO_LIBRARIES} ${SOUNDTOUCH_LIBRARIES} ${RUBBERBAND_LIBRARIES} ${SAMPLERATE_LIBRARIES} ${X11_LIBRARIES} ${FFTW3F_LIBRARIES})
         set(MX_TUNE_LIBRARIES ${MX_TUNE_LIBRARIES} " -l${list}" )
     endforeach(list)
-    
+
     foreach(list ${AUBIO_CFLAGS} ${SOUNDTOUCH_CFLAGS} ${RUBBERBAND_CFLAGS} ${SAMPLERATE_CFLAGS} ${FFTW3F_CFLAGS} ${X11_CFLAGS} ${FREETYPE_CFLAGS})
         set(MX_TUNE_CFLAGS ${MX_TUNE_CFLAGS} " ${list}" )
     endforeach(list)
@@ -72,17 +89,29 @@ ENDIF ()
     string(REPLACE ";" " " MX_TUNE_LIBRARIES ${MX_TUNE_LIBRARIES})
     string(REPLACE ";" " " MX_TUNE_CFLAGS ${MX_TUNE_CFLAGS})
 
+    include_directories(
+        ${AUBIO_INCLUDE_DIRS}
+        ${SOUNDTOUCH_INCLUDE_DIRS}
+        ${RUBBERBAND_INCLUDE_DIRS}
+        ${FFTW3F_INCLUDE_DIRS}
+        ${SAMPLERATE_INCLUDE_DIRS}
+        ${X11_INCLUDE_DIRS}
+        ${FREETYPE_INCLUDE_DIRS}
+    )
+
 ENDIF ()
 #}}}}
 
 include_directories(
-    .
-    .
-    JUCE/JuceLibraryCode
     JUCE/Source
+)
+
+# Use SYSTEM includes for third-party headers so their warnings are suppressed
+# when they are transitively included by project source files
+include_directories(SYSTEM
+    JUCE/JuceLibraryCode
     JUCE/JuceLibraryCode/modules
     VST3_SDK
-
 )
 
 
@@ -160,6 +189,10 @@ set ( CXX_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/delay.cpp
     ${CMAKE_CURRENT_LIST_DIR}/pitch_shifter_talent.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/PluginParameter.cpp
+)
+
+# JUCE plugin client wrappers — treated as third-party, warnings suppressed below
+set ( JUCE_PLUGIN_CLIENT_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_utils.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_Standalone.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_VST2.cpp
@@ -168,11 +201,11 @@ set ( CXX_SRCS
 )
 
 set_source_files_properties(
-    ${CXX_SRCS} PROPERTIES COMPILE_FLAGS 
+    ${CXX_SRCS} PROPERTIES COMPILE_FLAGS
     " -Os -O2 -std=c++17 -fpermissive -fPIC -Wextra -Weffc++ -Woverloaded-virtual -Wreorder -Wsign-promo -Wstrict-null-sentinel -Wfloat-equal -Wreturn-type -Wsign-compare -Wsizeof-pointer-memaccess -Woverflow -Wshadow -Wsequence-point -Wswitch-default -Wunused-but-set-parameter -Wunused-but-set-variable -Wunused-function -Wunused-label -Wunused-variable -Wmaybe-uninitialized -Wuninitialized -Wdisabled-optimization -Wdelete-non-virtual-dtor -Wno-non-virtual-dtor")
 
 set_source_files_properties(
-    ${C_SRCS} PROPERTIES COMPILE_FLAGS 
+    ${C_SRCS} PROPERTIES COMPILE_FLAGS
     " -Os -O2 -fpermissive -fPIC -Wno-unused-parameter -Wfloat-equal -Wreturn-type -Wsign-compare -Wsizeof-pointer-memaccess -Woverflow -Wshadow -Wsequence-point -Wswitch-default -Wunused-but-set-parameter -Wunused-but-set-variable -Wunused-function -Wunused-label -Wunused-variable -Wmaybe-uninitialized -Wuninitialized -Wdisabled-optimization")
 
 if(WIN32)
@@ -189,7 +222,7 @@ endif(WIN32)
 OPTION(MXTUNE_USE_STATIC_LIB "use static library" OFF)
 
 IF (APPLE)
-set (CXX_SRCS ${CXX_SRCS}
+set (JUCE_LIB_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_events.mm
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_basics.mm
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_data_structures.mm
@@ -199,10 +232,9 @@ set (CXX_SRCS ${CXX_SRCS}
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_core.mm
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_graphics.mm
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_plugin_client_VST_utils.mm
-    
 )
 ELSE ()
-set (CXX_SRCS ${CXX_SRCS}
+set (JUCE_LIB_SRCS
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_events.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_audio_basics.cpp
     ${CMAKE_CURRENT_LIST_DIR}/JUCE/JuceLibraryCode/include_juce_data_structures.cpp
@@ -214,16 +246,53 @@ set (CXX_SRCS ${CXX_SRCS}
 )
 ENDIF ()
 
+# Suppress all warnings for JUCE third-party library files
+set_source_files_properties(${JUCE_LIB_SRCS} ${JUCE_PLUGIN_CLIENT_SRCS} PROPERTIES COMPILE_FLAGS "-w")
+
+set (CXX_SRCS ${CXX_SRCS} ${JUCE_LIB_SRCS} ${JUCE_PLUGIN_CLIENT_SRCS})
+
 IF (WIN32)
     set(LINK_OPTIONS ${LINK_OPTIONS} "-static -lrubberband -lSoundTouch -laubio -lfftw3f -lfftw3 -lsamplerate")
 ELSEIF (APPLE)
-    set(LINK_OPTIONS ${LINK_OPTIONS} "-framework CoreFoundation -framework CoreServices -framework CoreGraphics -framework ImageIO -framework MapKit -framework CoreText -framework AudioToolbox -framework CoreAudio -framework CoreVideo -framework IOKit -framework AppKit -framework Accelerate -framework QuartzCore -framework Metal -L/usr/local/lib ${MX_TUNE_LIBRARIES} -lrubberband -lSoundTouch -laubio -lfftw3f -lSystem")
-    set(CMAKE_C_FLAGS "-fvisibility=hidden ${MX_TUNE_CFLAGS}")
-    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -std=c++17  ${MX_TUNE_CFLAGS}")
+    execute_process(
+        COMMAND brew --prefix
+        OUTPUT_VARIABLE HOMEBREW_PREFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    include_directories("${HOMEBREW_PREFIX}/include")
+    # Each option must be a separate list element so CMake passes them as
+    # individual arguments to the linker driver instead of one quoted string.
+    list(APPEND LINK_OPTIONS
+        "-framework CoreFoundation"
+        "-framework CoreServices"
+        "-framework CoreGraphics"
+        "-framework ImageIO"
+        "-framework MapKit"
+        "-framework CoreText"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
+        "-framework CoreVideo"
+        "-framework IOKit"
+        "-framework AppKit"
+        "-framework Accelerate"
+        "-framework QuartzCore"
+        "-framework Metal"
+        "-L${HOMEBREW_PREFIX}/lib"
+        "-lrubberband"
+        "-lSoundTouch"
+        "-laubio"
+        "-lfftw3f"
+        "-lSystem"
+    )
+    # -iquote adds the project root to the quoted-include search path only,
+    # preventing <version> (C++20 STL header) from resolving to ./VERSION
+    # on macOS's case-insensitive filesystem.
+    set(CMAKE_C_FLAGS "-fvisibility=hidden -DNDEBUG -Wno-unknown-warning-option -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
+    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -std=c++17 -DNDEBUG -Wno-unknown-warning-option -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
 ELSEIF (UNIX)
-    set(CMAKE_C_FLAGS "-fvisibility=hidden ${MX_TUNE_CFLAGS}")
-    set(CMAKE_CXX_FLAGS "-fvisibility=hidden ${MX_TUNE_CFLAGS}")
-    
+    set(CMAKE_C_FLAGS "-fvisibility=hidden -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
+    set(CMAKE_CXX_FLAGS "-fvisibility=hidden -iquote ${CMAKE_CURRENT_LIST_DIR} ${MX_TUNE_CFLAGS}")
+
     IF (MXTUNE_USE_STATIC_LIB)
         set(LINK_OPTIONS ${LINK_OPTIONS} "-s -lGL -lpthread -ldl -lX11 -lXext ${FREETYPE_LDFLAGS} -Wl,--no-undefined -Wl,-Bsymbolic -Wl,-Bstatic ${MX_TUNE_LIBRARIES} -Wl,-Bdynamic -Wl,--gc-sections -Wl,--as-needed -Wl,--strip-all -Wl,--exclude-libs,ALL -fPIC")
     ELSE ()
@@ -242,7 +311,7 @@ target_link_libraries(mx_tune ${LINK_OPTIONS})
 IF (WIN32)
     target_link_libraries(mx_tune
         gdi32
-        user32 
+        user32
         kernel32
         comctl32
         winmm
