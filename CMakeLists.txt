@@ -315,6 +315,8 @@ IF (WIN32)
         opengl32
         dxgi
         d3d11
+        gdiplus
+        dwmapi
         aubio
         fftw3f
         SoundTouch
