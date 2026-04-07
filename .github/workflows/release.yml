@@ -251,17 +251,32 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read version
         run: echo "PLUGIN_VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_ENV
 
+      - name: Check if version tag already exists
+        id: check_tag
+        run: |
+          if git ls-remote --tags origin "refs/tags/v${PLUGIN_VERSION}" | grep -q .; then
+            echo "Tag v${PLUGIN_VERSION} already exists — skipping release."
+            echo "is_new=false" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v${PLUGIN_VERSION} is new — proceeding with release."
+            echo "is_new=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download all artifacts
+        if: steps.check_tag.outputs.is_new == 'true'
         uses: actions/download-artifact@v4
         with:
           path: ./artifacts
           merge-multiple: true
 
       - name: Create GitHub Release
+        if: steps.check_tag.outputs.is_new == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.PLUGIN_VERSION }}
