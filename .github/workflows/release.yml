@@ -1,0 +1,282 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.name == 'windows' && 'msys2 {0}' || 'bash' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "PLUGIN_VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_ENV
+
+      # -----------------------------------------------------------------------
+      # Linux — apt packages
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            build-essential cmake pkg-config \
+            libfftw3-dev libsamplerate0-dev \
+            libaubio-dev libsoundtouch-dev librubberband-dev \
+            libx11-dev libxext-dev libfreetype-dev \
+            libcurl4-openssl-dev libasound2-dev
+
+      # -----------------------------------------------------------------------
+      # macOS — Homebrew packages
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (macOS)
+        if: matrix.name == 'macos'
+        run: brew install pkg-config cmake fftw aubio sound-touch rubberband
+
+      # -----------------------------------------------------------------------
+      # Windows — MSYS2 + MinGW-w64 packages
+      # -----------------------------------------------------------------------
+      - name: Set up MSYS2 (Windows)
+        if: matrix.name == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-python3
+            mingw-w64-x86_64-fftw
+            mingw-w64-x86_64-aubio
+            mingw-w64-x86_64-soundtouch
+            mingw-w64-x86_64-rubberband
+            zip unzip
+
+      # -----------------------------------------------------------------------
+      # VST3 SDK — all platforms
+      # -----------------------------------------------------------------------
+      - name: Clone VST3 SDK
+        run: |
+          git clone --recursive https://github.com/steinbergmedia/vst3sdk.git VST3_SDK
+          cd VST3_SDK
+          git checkout v3.7.1_build_50
+          git submodule update --recursive
+
+      # -----------------------------------------------------------------------
+      # JUCE download + Projucer resave — Linux
+      # -----------------------------------------------------------------------
+      - name: Setup JUCE (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-linux.zip" \
+               -o third_party/downloads/juce-7.0.5-linux.zip
+          unzip -q third_party/downloads/juce-7.0.5-linux.zip -d third_party/
+          PROJUCER="$(pwd)/third_party/JUCE/Projucer"
+          "$PROJUCER" --set-global-search-path linux defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$PROJUCER" --resave JUCE/mx_tune.jucer
+
+      # -----------------------------------------------------------------------
+      # JUCE download + Projucer resave + macOS 15+ patch — macOS
+      # -----------------------------------------------------------------------
+      - name: Setup JUCE (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-osx.zip" \
+               -o third_party/downloads/juce-7.0.5-osx.zip
+          unzip -q third_party/downloads/juce-7.0.5-osx.zip -d third_party/
+          PROJUCER="$(pwd)/third_party/JUCE/Projucer.app/Contents/MacOS/Projucer"
+          "$PROJUCER" --set-global-search-path osx defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$PROJUCER" --resave JUCE/mx_tune.jucer
+
+      - name: Patch JUCE for macOS 15+ (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          python3 - <<'PYEOF'
+          import pathlib, sys
+          p = pathlib.Path('JUCE/JuceLibraryCode/modules/juce_gui_basics/native/juce_mac_Windowing.mm')
+          if not p.exists():
+              print('WARNING: juce_mac_Windowing.mm not found — skipping patch')
+              sys.exit(0)
+          t = p.read_text()
+          OLD = '    JUCE_AUTORELEASEPOOL\n    {\n        CGImageRef screenShot = CGWindowListCreateImage'
+          if OLD not in t:
+              print('INFO: already patched or pattern not found')
+              sys.exit(0)
+          NEW = ('    JUCE_AUTORELEASEPOOL\n    {\n'
+                 '       #if MAC_OS_X_VERSION_MAX_ALLOWED >= 150000\n'
+                 '        juce::ignoreUnused (nsWindow);\n'
+                 '        return Image();\n'
+                 '       #else\n'
+                 '        CGImageRef screenShot = CGWindowListCreateImage')
+          END_OLD = '        CGImageRelease (screenShot);\n\n        return result;\n    }\n}'
+          END_NEW = '        CGImageRelease (screenShot);\n\n        return result;\n       #endif\n    }\n}'
+          t = t.replace(OLD, NEW, 1).replace(END_OLD, END_NEW, 1)
+          p.write_text(t)
+          print('Patched: CGWindowListCreateImage guarded for macOS 15.0+')
+          PYEOF
+
+      # -----------------------------------------------------------------------
+      # JUCE download + Projucer resave — Windows
+      # -----------------------------------------------------------------------
+      - name: Setup JUCE (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-windows.zip" \
+               -o third_party/downloads/juce-7.0.5-windows.zip
+          unzip -q third_party/downloads/juce-7.0.5-windows.zip -d third_party/
+          PROJUCER="$(pwd)/third_party/JUCE/Projucer.exe"
+          "$PROJUCER" --set-global-search-path windows defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$PROJUCER" --resave JUCE/mx_tune.jucer
+
+      # -----------------------------------------------------------------------
+      # CMake build — Linux & macOS
+      # -----------------------------------------------------------------------
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          mkdir -p build-cmake && cd build-cmake
+          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles"
+          make -j$(nproc)
+
+      - name: Build (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          HOMEBREW_PREFIX="$(brew --prefix)"
+          export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          mkdir -p build-cmake && cd build-cmake
+          cmake .. -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX"
+          make -j$(sysctl -n hw.logicalcpu)
+
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          mkdir -p build-cmake && cd build-cmake
+          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles"
+          make -j$(nproc)
+
+      # -----------------------------------------------------------------------
+      # Package
+      # -----------------------------------------------------------------------
+      - name: Package (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          BUNDLE="mx_tune-${PLUGIN_VERSION}.vst3"
+          mkdir -p "package/${BUNDLE}/Contents/x86_64-linux"
+          cp build-cmake/libmx_tune.so "package/${BUNDLE}/Contents/x86_64-linux/mx_tune.so"
+          cd package
+          zip -r "../MXTune-${PLUGIN_VERSION}-linux.zip" "${BUNDLE}"
+          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-linux.zip" >> $GITHUB_ENV
+
+      - name: Package (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          BUNDLE="mx_tune-${PLUGIN_VERSION}.vst3"
+          BUNDLE_DIR="package/${BUNDLE}/Contents/MacOS"
+          mkdir -p "$BUNDLE_DIR"
+          cp build-cmake/libmx_tune.dylib "${BUNDLE_DIR}/mx_tune"
+          cat > "package/${BUNDLE}/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key><string>English</string>
+              <key>CFBundleExecutable</key><string>mx_tune</string>
+              <key>CFBundleIdentifier</key><string>com.mxtune.MXTune</string>
+              <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+              <key>CFBundleName</key><string>MXTune</string>
+              <key>CFBundlePackageType</key><string>BNDL</string>
+              <key>CFBundleShortVersionString</key><string>${PLUGIN_VERSION}</string>
+              <key>CFBundleVersion</key><string>${PLUGIN_VERSION}</string>
+              <key>CFBundleSignature</key><string>MXTn</string>
+          </dict>
+          </plist>
+          PLIST
+          printf "BNDLMXTn" > "package/${BUNDLE}/Contents/PkgInfo"
+          codesign --force --sign - "package/${BUNDLE}"
+          cd package && zip -r "../MXTune-${PLUGIN_VERSION}-macos.zip" "${BUNDLE}"
+          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-macos.zip" >> $GITHUB_ENV
+
+      - name: Package (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          BUNDLE="mx_tune-${PLUGIN_VERSION}.vst3"
+          BUNDLE_DIR="package/${BUNDLE}/Contents/x86_64-win"
+          mkdir -p "$BUNDLE_DIR"
+          cp build-cmake/libmx_tune.dll "${BUNDLE_DIR}/mx_tune.vst3"
+          cd package && zip -r "../MXTune-${PLUGIN_VERSION}-windows.zip" "${BUNDLE}"
+          echo "ARTIFACT=MXTune-${PLUGIN_VERSION}-windows.zip" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MXTune-${{ matrix.name }}
+          path: ${{ env.ARTIFACT }}
+
+  # -------------------------------------------------------------------------
+  # Release — runs only on version tags, after all builds succeed
+  # -------------------------------------------------------------------------
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: echo "PLUGIN_VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_ENV
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MXTune v${{ env.PLUGIN_VERSION }}
+          body: |
+            ## MXTune v${{ env.PLUGIN_VERSION }}
+
+            ### Installation
+
+            **macOS** — extract `MXTune-*-macos.zip`, move the `.vst3` bundle to `/Library/Audio/Plug-Ins/VST3/`, rescan in your DAW.
+
+            **Windows** — extract `MXTune-*-windows.zip`, move the `.vst3` folder to `C:\Program Files\Common Files\VST3\`, rescan in your DAW.
+
+            **Linux** — extract `MXTune-*-linux.zip`, move the `.vst3` folder to `~/.vst3/` or `/usr/lib/vst3/`, rescan in your DAW.
+          files: |
+            artifacts/MXTune-*-macos.zip
+            artifacts/MXTune-*-windows.zip
+            artifacts/MXTune-*-linux.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
