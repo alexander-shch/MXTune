@@ -241,7 +241,7 @@ jobs:
         if: matrix.name == 'linux'
         run: |
           mkdir -p build-cmake && cd build-cmake
-          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles"
+          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles" -Wno-dev
           make -j$(nproc)
 
       - name: Build (macOS)
@@ -250,14 +250,14 @@ jobs:
           HOMEBREW_PREFIX="$(brew --prefix)"
           export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
           mkdir -p build-cmake && cd build-cmake
-          cmake .. -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX"
+          cmake .. -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" -Wno-dev
           make -j$(sysctl -n hw.logicalcpu)
 
       - name: Build (Windows)
         if: matrix.name == 'windows'
         run: |
           mkdir -p build-cmake && cd build-cmake
-          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Ninja"
+          cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Ninja" -Wno-dev
           ninja -j$(nproc)
 
       # -----------------------------------------------------------------------

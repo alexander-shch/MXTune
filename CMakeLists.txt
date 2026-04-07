@@ -7,11 +7,11 @@ cmake_minimum_required(VERSION 3.15)
 # Place your code here
 #}}}}
 
-enable_language(CXX C ASM)
 # Project name and version — edit VERSION file to cut a new release
 file(READ "${CMAKE_CURRENT_LIST_DIR}/VERSION" MXTUNE_VERSION)
 string(STRIP "${MXTUNE_VERSION}" MXTUNE_VERSION)
 project(mx_tune VERSION ${MXTUNE_VERSION})
+enable_language(CXX C ASM)
 add_definitions(-DMXTUNE_VERSION="${MXTUNE_VERSION}")
 
 # Derive a per-version VST3 plugin code so each version is treated as a
