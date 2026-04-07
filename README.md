@@ -1,5 +1,7 @@
 # MXTune
 
+[![Build and Release](https://github.com/alexander-shch/MXTune/actions/workflows/release.yml/badge.svg)](https://github.com/alexander-shch/MXTune/actions/workflows/release.yml)
+
 An open-source auto-tune / pitch correction audio plugin (VST3) with real-time pitch detection and correction to a user-defined musical scale or MIDI-driven note mapping.
 
 ## Credits
