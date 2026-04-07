@@ -121,29 +121,9 @@ add_definitions(-Os)
 add_definitions(-O2)
 add_definitions(-fpermissive)
 add_definitions(-fPIC)
-add_definitions(-Wextra)
-add_definitions(-Weffc++)
-add_definitions(-Woverloaded-virtual)
-add_definitions(-Wreorder)
-add_definitions(-Wsign-promo)
-add_definitions(-Wstrict-null-sentinel)
-add_definitions(-Wfloat-equal)
 add_definitions(-Wreturn-type)
 add_definitions(-Wsign-compare)
-add_definitions(-Wsizeof-pointer-memaccess)
-add_definitions(-Woverflow)
-add_definitions(-Wshadow)
-add_definitions(-Wsequence-point)
-add_definitions(-Wswitch-default)
-add_definitions(-Wunused-but-set-parameter)
-add_definitions(-Wunused-but-set-variable)
-add_definitions(-Wunused-function)
-add_definitions(-Wunused-label)
-add_definitions(-Wunused-variable)
-add_definitions(-Wmaybe-uninitialized)
 add_definitions(-Wuninitialized)
-add_definitions(-Wdisabled-optimization)
-add_definitions(-Wdelete-non-virtual-dtor)
 add_definitions(-Wno-non-virtual-dtor)
 add_definitions(-Wno-unused-parameter)
 add_definitions(
@@ -202,11 +182,11 @@ file(GLOB JUCE_PLUGIN_CLIENT_SRCS
 
 set_source_files_properties(
     ${CXX_SRCS} PROPERTIES COMPILE_FLAGS
-    " -Os -O2 -std=c++17 -fpermissive -fPIC -Wextra -Weffc++ -Woverloaded-virtual -Wreorder -Wsign-promo -Wstrict-null-sentinel -Wfloat-equal -Wreturn-type -Wsign-compare -Wsizeof-pointer-memaccess -Woverflow -Wshadow -Wsequence-point -Wswitch-default -Wunused-but-set-parameter -Wunused-but-set-variable -Wunused-function -Wunused-label -Wunused-variable -Wmaybe-uninitialized -Wuninitialized -Wdisabled-optimization -Wdelete-non-virtual-dtor -Wno-non-virtual-dtor")
+    " -Os -O2 -std=c++17 -fpermissive -fPIC -Wextra -Woverloaded-virtual -Wreorder -Wreturn-type -Wsign-compare -Woverflow -Wunused-function -Wunused-label -Wunused-variable -Wuninitialized -Wno-non-virtual-dtor -Wno-unused-parameter")
 
 set_source_files_properties(
     ${C_SRCS} PROPERTIES COMPILE_FLAGS
-    " -Os -O2 -fpermissive -fPIC -Wno-unused-parameter -Wfloat-equal -Wreturn-type -Wsign-compare -Wsizeof-pointer-memaccess -Woverflow -Wshadow -Wsequence-point -Wswitch-default -Wunused-but-set-parameter -Wunused-but-set-variable -Wunused-function -Wunused-label -Wunused-variable -Wmaybe-uninitialized -Wuninitialized -Wdisabled-optimization")
+    " -Os -O2 -fpermissive -fPIC -Wno-unused-parameter -Wreturn-type -Wsign-compare -Woverflow -Wunused-function -Wunused-label -Wunused-variable -Wuninitialized")
 
 if(WIN32)
     enable_language(RC)
