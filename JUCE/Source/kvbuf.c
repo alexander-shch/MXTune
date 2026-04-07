@@ -147,7 +147,7 @@ static inline unsigned long long get_uint64(const unsigned char *data)
         | (((unsigned long long)data[6]) << 48) | (((unsigned long long)data[7]) << 56));
 }
 
-static inline float get_float16(const unsigned char *data) __attribute__((unused));
+static inline float __attribute__((unused)) get_float16(const unsigned char *data)
 {
     return 0;
 }
