@@ -291,10 +291,14 @@ jobs:
       - name: Package (macOS)
         if: matrix.name == 'macos'
         run: |
+          DYLIB="build-cmake/libmx_tune.dylib"
+          IFS='.' read -r MX_MAJOR MX_MINOR MX_PATCH <<< "$PLUGIN_VERSION"
+          AU_VERSION=$(( (MX_MAJOR << 16) | (MX_MINOR << 8) | MX_PATCH ))
+
+          # ---- VST3 bundle ----
           BUNDLE="mx_tune-${PLUGIN_VERSION}.vst3"
-          BUNDLE_DIR="package/${BUNDLE}/Contents/MacOS"
-          mkdir -p "$BUNDLE_DIR"
-          cp build-cmake/libmx_tune.dylib "${BUNDLE_DIR}/mx_tune"
+          mkdir -p "package/${BUNDLE}/Contents/MacOS"
+          cp "$DYLIB" "package/${BUNDLE}/Contents/MacOS/mx_tune"
           cat > "package/${BUNDLE}/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -314,7 +318,44 @@ jobs:
           PLIST
           printf "BNDLMXTn" > "package/${BUNDLE}/Contents/PkgInfo"
           codesign --force --sign - "package/${BUNDLE}"
-          cd package && zip -r "../MXTune-${PLUGIN_VERSION}-macos.zip" "${BUNDLE}"
+
+          # ---- AU component bundle ----
+          AU_BUNDLE="mx_tune-${PLUGIN_VERSION}.component"
+          mkdir -p "package/${AU_BUNDLE}/Contents/MacOS"
+          cp "$DYLIB" "package/${AU_BUNDLE}/Contents/MacOS/mx_tune"
+          cat > "package/${AU_BUNDLE}/Contents/Info.plist" <<AUPLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key><string>English</string>
+              <key>CFBundleExecutable</key><string>mx_tune</string>
+              <key>CFBundleIdentifier</key><string>com.mxtune.MXTune.AU</string>
+              <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+              <key>CFBundleName</key><string>MXTune</string>
+              <key>CFBundlePackageType</key><string>BNDL</string>
+              <key>CFBundleShortVersionString</key><string>${PLUGIN_VERSION}</string>
+              <key>CFBundleVersion</key><string>${PLUGIN_VERSION}</string>
+              <key>CFBundleSignature</key><string>Manu</string>
+              <key>AudioComponents</key>
+              <array>
+                  <dict>
+                      <key>type</key><string>aufx</string>
+                      <key>subtype</key><string>MXTn</string>
+                      <key>manufacturer</key><string>Manu</string>
+                      <key>name</key><string>MXTune: Pitch Correction</string>
+                      <key>version</key><integer>${AU_VERSION}</integer>
+                      <key>factoryFunction</key><string>MXTuneAUFactory</string>
+                      <key>sandboxSafe</key><true/>
+                  </dict>
+              </array>
+          </dict>
+          </plist>
+          AUPLIST
+          printf "BNDLManu" > "package/${AU_BUNDLE}/Contents/PkgInfo"
+          codesign --force --sign - "package/${AU_BUNDLE}"
+
+          cd package && zip -r "../MXTune-${PLUGIN_VERSION}-macos.zip" "${BUNDLE}" "${AU_BUNDLE}"
 
       - name: Package (Windows)
         if: matrix.name == 'windows'
@@ -359,7 +400,11 @@ jobs:
 
             ### Installation
 
-            **macOS** — extract `MXTune-*-macos.zip`, move the `.vst3` bundle to `/Library/Audio/Plug-Ins/VST3/`, rescan in your DAW.
+            **macOS** — extract `MXTune-*-macos.zip`:
+            - VST3: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
+            - AU: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
+
+            Rescan plugins in your DAW.
 
             **Windows** — extract `MXTune-*-windows.zip`, move the `.vst3` folder to `C:\Program Files\Common Files\VST3\`, rescan in your DAW.
 

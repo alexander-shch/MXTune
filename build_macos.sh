@@ -168,5 +168,55 @@ sudo chown -R root:wheel "$VST3_BUNDLE"
 sudo codesign --force --sign - "$VST3_BUNDLE"
 sudo chmod -R 755 "$VST3_BUNDLE"
 
-echo_step "Done! MXTune ${PLUGIN_VERSION} installed to $VST3_BUNDLE"
-echo_step "In Ableton: Preferences > Plug-Ins > enable VST3, rescan, look for 'mx_tune'"
+echo_step "Done! MXTune ${PLUGIN_VERSION} VST3 installed to $VST3_BUNDLE"
+
+# ---------------------------------------------------------------------------
+# 6. Install AU component bundle
+# ---------------------------------------------------------------------------
+IFS='.' read -r MX_MAJOR MX_MINOR MX_PATCH <<< "$PLUGIN_VERSION"
+AU_VERSION=$(( (MX_MAJOR << 16) | (MX_MINOR << 8) | MX_PATCH ))
+
+AU_BUNDLE="/Library/Audio/Plug-Ins/Components/mx_tune-${PLUGIN_VERSION}.component"
+echo_step "Installing AU component to $AU_BUNDLE ..."
+
+sudo rm -rf "$AU_BUNDLE"
+sudo mkdir -p "$AU_BUNDLE/Contents/MacOS"
+sudo cp "$SCRIPT_DIR/build-cmake/libmx_tune.dylib" "$AU_BUNDLE/Contents/MacOS/mx_tune"
+
+sudo tee "$AU_BUNDLE/Contents/Info.plist" > /dev/null <<AUPLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key><string>English</string>
+    <key>CFBundleExecutable</key><string>mx_tune</string>
+    <key>CFBundleIdentifier</key><string>com.mxtune.MXTune.AU</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>MXTune</string>
+    <key>CFBundlePackageType</key><string>BNDL</string>
+    <key>CFBundleShortVersionString</key><string>${PLUGIN_VERSION}</string>
+    <key>CFBundleVersion</key><string>${PLUGIN_VERSION}</string>
+    <key>CFBundleSignature</key><string>Manu</string>
+    <key>AudioComponents</key>
+    <array>
+        <dict>
+            <key>type</key><string>aufx</string>
+            <key>subtype</key><string>MXTn</string>
+            <key>manufacturer</key><string>Manu</string>
+            <key>name</key><string>MXTune: Pitch Correction</string>
+            <key>version</key><integer>${AU_VERSION}</integer>
+            <key>factoryFunction</key><string>MXTuneAUFactory</string>
+            <key>sandboxSafe</key><true/>
+        </dict>
+    </array>
+</dict>
+</plist>
+AUPLIST
+
+printf "BNDLManu" | sudo tee "$AU_BUNDLE/Contents/PkgInfo" > /dev/null
+sudo chown -R root:wheel "$AU_BUNDLE"
+sudo codesign --force --sign - "$AU_BUNDLE"
+sudo chmod -R 755 "$AU_BUNDLE"
+
+echo_step "Done! MXTune ${PLUGIN_VERSION} AU installed to $AU_BUNDLE"
+echo_step "In Logic/GarageBand: rescan plugins, look for 'MXTune: Pitch Correction'"
