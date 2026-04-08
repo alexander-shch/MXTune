@@ -41,6 +41,11 @@ jobs:
       run:
         shell: ${{ matrix.name == 'windows' && 'msys2 {0}' || 'bash' }}
 
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      CCACHE_COMPRESS: "true"
+
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +54,7 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: >-
-            build-essential cmake pkg-config
+            build-essential cmake pkg-config ccache
             libfftw3-dev libsamplerate0-dev
             libaubio-dev libsoundtouch-dev librubberband-dev
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxrender-dev libxcomposite-dev libfreetype-dev
@@ -62,11 +67,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Caches/Homebrew
-          key: brew-${{ runner.os }}-fftw-aubio-soundtouch-rubberband
+          key: brew-${{ runner.os }}-fftw-aubio-soundtouch-rubberband-ccache
 
       - name: Install dependencies (macOS)
         if: matrix.name == 'macos'
-        run: brew install pkg-config cmake fftw aubio sound-touch rubberband
+        run: brew install pkg-config cmake fftw aubio sound-touch rubberband ccache
 
       - name: Set up MSYS2 (Windows)
         if: matrix.name == 'windows'
@@ -80,10 +85,18 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-ccache
             mingw-w64-x86_64-fftw
             mingw-w64-x86_64-aubio
             mingw-w64-x86_64-soundtouch
             mingw-w64-x86_64-rubberband
+
+      - name: Cache ccache objects
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-${{ matrix.name }}-${{ hashFiles('CMakeLists.txt', 'JUCE/mx_tune.jucer') }}
+          restore-keys: ccache-${{ matrix.name }}-
 
       - name: Cache VST3 SDK
         id: cache-vst3
@@ -181,7 +194,9 @@ jobs:
       - name: Build (Linux)
         if: matrix.name == 'linux'
         run: |
-          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles" -Wno-dev
+          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -G "Unix Makefiles" -Wno-dev
           cmake --build build-cmake --parallel
 
       - name: Build (macOS)
@@ -189,11 +204,18 @@ jobs:
         run: |
           HOMEBREW_PREFIX="$(brew --prefix)"
           export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-          cmake -B build-cmake -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" -Wno-dev
+          cmake -B build-cmake -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -Wno-dev
           cmake --build build-cmake --parallel
 
       - name: Build (Windows)
         if: matrix.name == 'windows'
         run: |
-          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Ninja" -Wno-dev
+          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -G "Ninja" -Wno-dev
           cmake --build build-cmake --parallel
+
+      - name: Show ccache stats
+        run: ccache --show-stats
