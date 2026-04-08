@@ -406,18 +406,18 @@ jobs:
           cat artifacts/LATEST_RELEASE_NOTES.md > FULL_RELEASE_NOTES.md
           cat >> FULL_RELEASE_NOTES.md <<EOF
 
-### Installation
+          ### Installation
 
-**macOS** — extract \`MXTune-*-macos.zip\`:
-- VST3: move \`mx_tune-*.vst3\` to \`/Library/Audio/Plug-Ins/VST3/\`
-- AU: move \`mx_tune-*.component\` to \`/Library/Audio/Plug-Ins/Components/\`
+          **macOS** — extract \`MXTune-*-macos.zip\`:
+          - VST3: move \`mx_tune-*.vst3\` to \`/Library/Audio/Plug-Ins/VST3/\`
+          - AU: move \`mx_tune-*.component\` to \`/Library/Audio/Plug-Ins/Components/\`
 
-Rescan plugins in your DAW.
+          Rescan plugins in your DAW.
 
-**Windows** — extract \`MXTune-*-windows.zip\`, move the \`.vst3\` folder to \`C:\Program Files\Common Files\VST3/\`, rescan in your DAW.
+          **Windows** — extract \`MXTune-*-windows.zip\`, move the \`.vst3\` folder to \`C:\Program Files\Common Files\VST3/\`, rescan in your DAW.
 
-**Linux** — extract \`MXTune-*-linux.zip\`, move the \`.vst3\` folder to \`~/.vst3/\` or \`/usr/lib/vst3/\`, rescan in your DAW.
-EOF
+          **Linux** — extract \`MXTune-*-linux.zip\`, move the \`.vst3\` folder to \`~/.vst3/\` or \`/usr/lib/vst3/\`, rescan in your DAW.
+          EOF
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
