@@ -38,7 +38,8 @@ class PluginGui  : public AudioProcessorEditor,
                    public Timer,
                    public Slider::Listener,
                    public Button::Listener,
-                   public ComboBox::Listener
+                   public ComboBox::Listener,
+                   public ScrollBar::Listener
 {
 public:
     //==============================================================================
@@ -64,6 +65,10 @@ public:
     void _y_zoom(bool in);
 
     void _draw_note_limit(float& x0, float& y0, float& x1, float& y1);
+
+    // Scroll bar methods
+    void scrollBarMoved(ScrollBar* scrollBarThatHasMoved, double newRangeStart) override;
+    void _update_scroll_bars();
     //[/UserMethods]
 
     void paint (Graphics& g) override;
@@ -193,6 +198,8 @@ private:
     std::unique_ptr<TextButton> textButtonSetting;
     std::unique_ptr<TextButton> textButtonUndoNote;
     std::unique_ptr<TextButton> textButtonRedoNote;
+    std::unique_ptr<ScrollBar> horizontalScrollBar;
+    std::unique_ptr<ScrollBar> verticalScrollBar;
 
 
     //==============================================================================

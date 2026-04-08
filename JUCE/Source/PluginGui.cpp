@@ -420,6 +420,19 @@ PluginGui::PluginGui (AutotalentAudioProcessor& p)
     //[UserPreSize]
     //[/UserPreSize]
 
+    // Initialize scroll bars before setSize to prevent crashes in resized()
+    horizontalScrollBar.reset(new ScrollBar(false));
+    addAndMakeVisible(horizontalScrollBar.get());
+    horizontalScrollBar->addListener(this);
+    horizontalScrollBar->setRangeLimits(0.0, _time_max_len);
+    horizontalScrollBar->setCurrentRange(_time_left, _time_right - _time_left);
+
+    verticalScrollBar.reset(new ScrollBar(true));
+    addAndMakeVisible(verticalScrollBar.get());
+    verticalScrollBar->addListener(this);
+    verticalScrollBar->setRangeLimits(_pitch_min, _pitch_max);
+    verticalScrollBar->setCurrentRange(_pitch_down, _pitch_up - _pitch_down);
+
     setResizable(true, true);
     setResizeLimits(860, 600, 10000, 10000);
     setSize (860, 600);
@@ -428,6 +441,7 @@ PluginGui::PluginGui (AutotalentAudioProcessor& p)
     //[Constructor] You can add your own custom stuff here..
     _update_gui_parameter();
     startTimer(1000 / 15);
+
     //[/Constructor]
 }
 
@@ -481,6 +495,8 @@ PluginGui::~PluginGui()
     textButtonSetting = nullptr;
     textButtonUndoNote = nullptr;
     textButtonRedoNote = nullptr;
+    horizontalScrollBar = nullptr;
+    verticalScrollBar = nullptr;
 
 
     //[Destructor]. You can add your own custom destruction code here..
@@ -502,8 +518,8 @@ void PluginGui::paint (Graphics& g)
         //[UserPaintCustomArguments] Customize the painting arguments here..
         _draw_x = x + 24;
         _draw_y = y;
-        _draw_w = width - 24;
-        _draw_h = height;
+        _draw_w = width - 24 - 16; // Leave space for vertical scroll bar
+        _draw_h = height - 16;     // Leave space for horizontal scroll bar
         //[/UserPaintCustomArguments]
         g.setColour (fillColour);
         g.fillRect (x, y, width, height);
@@ -737,13 +753,13 @@ void PluginGui::resized()
 
     // Right-anchored top-bar controls (preserve original right margins from 860px window)
     groupComponent4->setBounds(248, 8, w - 252, 88);
-    textButtonUndoNote->setBounds(w - 308, 24, 64, 24);
-    textButtonRedoNote->setBounds(w - 308, 64, 64, 24);
-    textButtonSnapKey->setBounds(w - 236, 24, 80, 24);
-    textButtonCANote->setBounds(w - 236, 64, 80, 24);
+    textButtonUndoNote->setBounds(w - 380, 24, 64, 24);
+    textButtonRedoNote->setBounds(w - 316, 64, 64, 24);
+    textButtonSnapKey->setBounds(w - 316, 24, 80, 24);
     toggleButtonTrack->setBounds(w - 148, 24, 64, 24);
-    textButtonClearNote->setBounds(w - 148, 64, 64, 24);
     toggleButtonSnap->setBounds(w - 76, 24, 64, 24);
+    textButtonCANote->setBounds(w - 236, 64, 80, 24);
+    textButtonClearNote->setBounds(w - 148, 64, 64, 24);
     textButtonClearPitch->setBounds(w - 76, 64, 64, 24);
 
     // Bottom-left panel — pin to bottom
@@ -754,6 +770,24 @@ void PluginGui::resized()
     label11->setBounds(16, g3y + 56, 56, 24);
     sliderMaxInterval->setBounds(80, g3y + 56, 48, 24);
     textButtonSetting->setBounds(24, g3y + 104, 104, 40);
+
+    // Position scroll bars
+    int graphX = 144;
+    int graphY = 96;
+    int graphWidth = w - 148;
+    int graphHeight = h - 100;
+
+    // Horizontal scroll bar at bottom of graph area
+    if (horizontalScrollBar)
+        horizontalScrollBar->setBounds(graphX, graphY + graphHeight - 16, graphWidth - 16, 16);
+
+    // Vertical scroll bar on right side of graph area
+    if (verticalScrollBar)
+        verticalScrollBar->setBounds(graphX + graphWidth - 16, graphY, 16, graphHeight - 16);
+
+    // Update scroll bar ranges based on current view
+    _update_scroll_bars();
+
     //[/UserResized]
 }
 
@@ -1177,6 +1211,26 @@ void PluginGui::comboBoxChanged (ComboBox* comboBoxThatHasChanged)
     //[/UsercomboBoxChanged_Post]
 }
 
+void PluginGui::scrollBarMoved(ScrollBar* scrollBarThatHasMoved, double newRangeStart)
+{
+    if (scrollBarThatHasMoved == horizontalScrollBar.get())
+    {
+        // Horizontal scroll bar moved
+        double rangeSize = horizontalScrollBar->getCurrentRangeSize();
+        _time_left = newRangeStart;
+        _time_right = newRangeStart + rangeSize;
+        repaint();
+    }
+    else if (scrollBarThatHasMoved == verticalScrollBar.get())
+    {
+        // Vertical scroll bar moved
+        double rangeSize = verticalScrollBar->getCurrentRangeSize();
+        _pitch_down = newRangeStart;
+        _pitch_up = newRangeStart + rangeSize;
+        repaint();
+    }
+}
+
 void PluginGui::mouseDown (const MouseEvent& e)
 {
     //[UserCode_mouseDown] -- Add your code here...
@@ -1450,22 +1504,22 @@ void PluginGui::mouseWheelMove (const MouseEvent& e, const MouseWheelDetails& wh
 
 
     // x zoom
-    if (!_is_ctrl && !_is_shift && _is_alt)
+    if (!e.mods.isCtrlDown() && !e.mods.isShiftDown() && e.mods.isAltDown())
     {
         _x_zoom(wheel.deltaY > 0);
         repaint();
     }
-    else if (!_is_ctrl && _is_shift && !_is_alt) //x move
+    else if (!e.mods.isCtrlDown() && e.mods.isShiftDown() && !e.mods.isAltDown()) //x move
     {
-        _x_move(wheel.deltaY > 0);
+        _x_move(wheel.deltaY <= 0);  // Scroll up = right, scroll down = left
         repaint();
     }
-    else if (_is_ctrl && !_is_shift && !_is_alt) // y zoom
+    else if (e.mods.isCtrlDown() && !e.mods.isShiftDown() && !e.mods.isAltDown()) // y zoom
     {
         _y_zoom(wheel.deltaY > 0);
         repaint();
     }
-    else if (!_is_ctrl && !_is_shift && !_is_alt) //y move
+    else if (!e.mods.isCtrlDown() && !e.mods.isShiftDown() && !e.mods.isAltDown()) //y move
     {
         _y_move(wheel.deltaY > 0);
         repaint();
@@ -1784,33 +1838,46 @@ void PluginGui::_update_notes()
 void PluginGui::_x_move(bool left)
 {
     float diff = _time_right - _time_left;
+    float scroll_amount = diff * 0.1f; // Scroll by 10% of current view
+
     if (left)
     {
-        _time_left -= (diff * 0.1);
-        if (_time_left < 0.)
+        // Scroll left
+        _time_left -= scroll_amount;
+        _time_right -= scroll_amount;
+
+        // Prevent going too far left (allow some negative space for better UX)
+        if (_time_left < -diff * 0.5f)
         {
-            _time_left = 0.;
-        }
-        _time_right = _time_left + diff;
-        if (_time_right > _time_max_len)
-        {
-            _time_right = _time_max_len;
+            _time_left = -diff * 0.5f;
+            _time_right = _time_left + diff;
         }
     }
     else
     {
-        _time_right += (diff * 0.1);;
-        if (_time_right > _time_max_len)
-        {
-            _time_right = _time_max_len;
-        }
-        _time_left = _time_right - diff;
-        if (_time_left < 0.)
-        {
-            _time_left = 0.;
-        }
+        // Scroll right
+        _time_left += scroll_amount;
+        _time_right += scroll_amount;
+
+        // Allow scrolling beyond current content for better UX
+        // No upper limit for now, but could be clamped to _time_max_len if needed
     }
 
+    // Update scroll bar position
+    _update_scroll_bars();
+}
+
+void PluginGui::_update_scroll_bars()
+{
+    if (horizontalScrollBar)
+    {
+        horizontalScrollBar->setCurrentRange(_time_left, _time_right - _time_left, dontSendNotification);
+    }
+
+    if (verticalScrollBar)
+    {
+        verticalScrollBar->setCurrentRange(_pitch_down, _pitch_up - _pitch_down, dontSendNotification);
+    }
 }
 
 void PluginGui::_y_move(bool up)
@@ -1831,6 +1898,8 @@ void PluginGui::_y_move(bool up)
             _pitch_down--;
         }
     }
+
+    _update_scroll_bars();
 }
 
 void PluginGui::_x_zoom(bool in)
