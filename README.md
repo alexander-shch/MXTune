@@ -4,6 +4,8 @@
 
 An open-source auto-tune / pitch correction audio plugin (VST3) with real-time pitch detection and correction to a user-defined musical scale or MIDI-driven note mapping.
 
+See the [CHANGELOG.md](./CHANGELOG.md) for a history of features and bugfixes.
+
 ## Credits
 
 - **Original author:** [Liu An Lin (liuanlin-mx)](https://github.com/liuanlin-mx/MXTune) — core pitch detection and correction algorithm, based on Tom Baran's [Autotalent](http://web.mit.edu/tbaran/www/autotalent.html) and [TalentedHack](http://code.google.com/p/talentledhack/)
