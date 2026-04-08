@@ -36,6 +36,42 @@ Rescan plugins in your DAW.
 
 **Linux** — extract the `.zip`, move `mx_tune-*.vst3` to `~/.vst3/` or `/usr/lib/vst3/`, rescan in your DAW.
 
+### Troubleshooting (macOS/Windows/Linux)
+
+If the plugin fails to load or shows as "incompatible":
+1. **macOS**: Ensure you moved the plugin to the correct system directory. If it still fails, try running `auval -v aufx MXTn Manu` in a terminal to see if the system reports any signature or dependency errors.
+2. **DAW Cache**: Most DAWs (like REAPER, Ableton, or Logic) cache failed plugin scans. You must "Clear Cache and Rescan" in your DAW preferences after an update.
+3. **Permissions**: On macOS, if you get a "Developer cannot be verified" message, go to **System Settings > Privacy & Security** and click "Allow Anyway" for the plugin.
+
+## Developer Notes
+
+This project is built using **JUCE 7** and **CMake**. It bridges legacy C-based pitch algorithms with modern C++ plugin wrappers.
+
+### Architecture & Dependencies
+
+The plugin relies on several high-performance audio libraries:
+- **RubberBand**: Used for high-quality time-stretching and pitch-shifting.
+- **SoundTouch**: Provides an alternative pitch-shifting engine.
+- **Aubio**: Real-time pitch detection (YIN/FFT based).
+- **FFTW3**: Handles fast Fourier transforms for spectral processing.
+
+On macOS, these are typically installed via Homebrew for development, but the `build_macos.sh` script is designed to make the final plugin **self-contained**.
+
+### macOS Bundling & Signing (Important)
+
+Standard macOS plugins are often dynamically linked to Homebrew libraries, which causes them to crash on other users' machines. Our build process handles this automatically:
+1. **Framework Bundling**: Copies `.dylib` files from `/opt/homebrew/` into the plugin's `Contents/Frameworks/` directory.
+2. **RPath Fixing**: Uses `install_name_tool` to change the load paths from absolute paths to `@loader_path/../Frameworks/`.
+3. **Deep Signing**: Since ad-hoc signing on macOS is strict, we sign the internal dylibs individually before performing a "deep" signature on the entire `.vst3` or `.component` bundle.
+
+### JUCE & macOS 15 Compatibility
+
+JUCE 7.0.5 has a known issue with `CGWindowListCreateImage` on macOS 15 Sequoia (where the API was deprecated/removed). The `build_macos.sh` script includes a Python-based patcher that automatically guards this call in the JUCE source code before building to ensure stability on the latest macOS versions.
+
+### Projucer vs CMake
+
+While the project uses a `.jucer` file to manage JUCE modules, the actual build orchestration is handled by `CMakeLists.txt`. The `build_macos.sh` script runs the Projucer CLI to regenerate the `JuceLibraryCode` before handing off the build to CMake.
+
 ## Hot keys
 
 - `alt + mouse wheel` — x zoom
