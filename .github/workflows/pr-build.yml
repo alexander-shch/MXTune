@@ -1,0 +1,199 @@
+name: PR Build
+
+on:
+  pull_request:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure tests
+        run: cmake -B build-tests tests/ -Wno-dev
+
+      - name: Build tests
+        run: cmake --build build-tests --parallel
+
+      - name: Run tests
+        run: cd build-tests && ctest --output-on-failure
+
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+
+    runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.name == 'windows' && 'msys2 {0}' || 'bash' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: matrix.name == 'linux'
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: >-
+            build-essential cmake pkg-config
+            libfftw3-dev libsamplerate0-dev
+            libaubio-dev libsoundtouch-dev librubberband-dev
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxrender-dev libxcomposite-dev libfreetype-dev
+            libcurl4-openssl-dev libasound2-dev
+            libglu1-mesa-dev mesa-common-dev
+          version: 1.0
+
+      - name: Cache Homebrew downloads
+        if: matrix.name == 'macos'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: brew-${{ runner.os }}-fftw-aubio-soundtouch-rubberband
+
+      - name: Install dependencies (macOS)
+        if: matrix.name == 'macos'
+        run: brew install pkg-config cmake fftw aubio sound-touch rubberband
+
+      - name: Set up MSYS2 (Windows)
+        if: matrix.name == 'windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          cache: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-fftw
+            mingw-w64-x86_64-aubio
+            mingw-w64-x86_64-soundtouch
+            mingw-w64-x86_64-rubberband
+
+      - name: Cache VST3 SDK
+        id: cache-vst3
+        uses: actions/cache@v4
+        with:
+          path: VST3_SDK
+          key: vst3sdk-v3.7.1_build_50-${{ runner.os }}
+
+      - name: Clone VST3 SDK
+        if: steps.cache-vst3.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: v3.7.1_build_50
+          path: VST3_SDK
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Cache JUCE
+        id: cache-juce
+        uses: actions/cache@v4
+        with:
+          path: third_party
+          key: juce-7.0.5-${{ runner.os }}
+
+      - name: Download JUCE (Linux)
+        if: matrix.name == 'linux' && steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-linux.zip" \
+               -o third_party/downloads/juce.zip
+          unzip -q third_party/downloads/juce.zip -d third_party/
+
+      - name: Download JUCE (macOS)
+        if: matrix.name == 'macos' && steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-osx.zip" \
+               -o third_party/downloads/juce.zip
+          unzip -q third_party/downloads/juce.zip -d third_party/
+
+      - name: Download JUCE (Windows)
+        if: matrix.name == 'windows' && steps.cache-juce.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p third_party/downloads
+          curl -fL "https://github.com/juce-framework/JUCE/releases/download/7.0.5/juce-7.0.5-windows.zip" \
+               -o third_party/downloads/juce.zip
+          unzip -q third_party/downloads/juce.zip -d third_party/
+
+      - name: Run Projucer (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          "$(pwd)/third_party/JUCE/Projucer" \
+            --set-global-search-path linux defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$(pwd)/third_party/JUCE/Projucer" --resave JUCE/mx_tune.jucer
+
+      - name: Run Projucer (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          "$(pwd)/third_party/JUCE/Projucer.app/Contents/MacOS/Projucer" \
+            --set-global-search-path osx defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$(pwd)/third_party/JUCE/Projucer.app/Contents/MacOS/Projucer" --resave JUCE/mx_tune.jucer
+
+      - name: Run Projucer (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          "$(pwd)/third_party/JUCE/Projucer.exe" \
+            --set-global-search-path windows defaultJuceModulePath "$(pwd)/third_party/JUCE/modules"
+          "$(pwd)/third_party/JUCE/Projucer.exe" --resave JUCE/mx_tune.jucer
+
+      - name: Patch JUCE for macOS 15+
+        if: matrix.name == 'macos'
+        run: |
+          python3 - <<'PYEOF'
+          import pathlib, sys
+          p = pathlib.Path('JUCE/JuceLibraryCode/modules/juce_gui_basics/native/juce_mac_Windowing.mm')
+          if not p.exists():
+              print('WARNING: juce_mac_Windowing.mm not found — skipping patch'); sys.exit(0)
+          t = p.read_text()
+          OLD = '    JUCE_AUTORELEASEPOOL\n    {\n        CGImageRef screenShot = CGWindowListCreateImage'
+          if OLD not in t:
+              print('INFO: already patched'); sys.exit(0)
+          NEW = ('    JUCE_AUTORELEASEPOOL\n    {\n'
+                 '       #if MAC_OS_X_VERSION_MAX_ALLOWED >= 150000\n'
+                 '        juce::ignoreUnused (nsWindow);\n'
+                 '        return Image();\n'
+                 '       #else\n'
+                 '        CGImageRef screenShot = CGWindowListCreateImage')
+          END_OLD = '        CGImageRelease (screenShot);\n\n        return result;\n    }\n}'
+          END_NEW = '        CGImageRelease (screenShot);\n\n        return result;\n       #endif\n    }\n}'
+          p.write_text(t.replace(OLD, NEW, 1).replace(END_OLD, END_NEW, 1))
+          print('Patched CGWindowListCreateImage for macOS 15+')
+          PYEOF
+
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles" -Wno-dev
+          cmake --build build-cmake --parallel
+
+      - name: Build (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          HOMEBREW_PREFIX="$(brew --prefix)"
+          export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          cmake -B build-cmake -DCMAKE_PREFIX_PATH="$HOMEBREW_PREFIX" -Wno-dev
+          cmake --build build-cmake --parallel
+
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          cmake -B build-cmake -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Ninja" -Wno-dev
+          cmake --build build-cmake --parallel
