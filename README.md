@@ -2,7 +2,7 @@
 
 [![Build and Release](https://github.com/alexander-shch/MXTune/actions/workflows/release.yml/badge.svg)](https://github.com/alexander-shch/MXTune/actions/workflows/release.yml)
 
-An open-source auto-tune / pitch correction audio plugin (VST3) with real-time pitch detection and correction to a user-defined musical scale or MIDI-driven note mapping.
+An open-source auto-tune / pitch correction audio plugin (VST3/AU) with real-time pitch detection and correction to a user-defined musical scale or MIDI-driven note mapping.
 
 See the [CHANGELOG.md](./CHANGELOG.md) for a history of features and bugfixes.
 
@@ -24,55 +24,24 @@ See the [CHANGELOG.md](./CHANGELOG.md) for a history of features and bugfixes.
 
 All releases: [github.com/alexander-shch/MXTune/releases](https://github.com/alexander-shch/MXTune/releases)
 
-### Installation
+## Installation
 
-**macOS** — extract the `.zip`:
-- VST3: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
-- AU: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
+### macOS
+Extract the `.zip`:
+- **VST3**: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
+- **AU**: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
 
-Rescan plugins in your DAW.
+### Windows
+Extract the `.zip`, move the `.vst3` folder to `C:\Program Files\Common Files\VST3\`.
 
-**Windows** — extract the `.zip`, move `mx_tune-*.vst3` to `C:\Program Files\Common Files\VST3\`, rescan in your DAW.
+### Linux
+Extract the `.zip`, move the `.vst3` folder to `~/.vst3/` or `/usr/lib/vst3/`.
 
-**Linux** — extract the `.zip`, move `mx_tune-*.vst3` to `~/.vst3/` or `/usr/lib/vst3/`, rescan in your DAW.
+---
 
-### Troubleshooting (macOS/Windows/Linux)
+## Usage
 
-If the plugin fails to load or shows as "incompatible":
-1. **macOS**: Ensure you moved the plugin to the correct system directory. If it still fails, try running `auval -v aufx MXTn Manu` in a terminal to see if the system reports any signature or dependency errors.
-2. **DAW Cache**: Most DAWs (like REAPER, Ableton, or Logic) cache failed plugin scans. You must "Clear Cache and Rescan" in your DAW preferences after an update.
-3. **Permissions**: On macOS, if you get a "Developer cannot be verified" message, go to **System Settings > Privacy & Security** and click "Allow Anyway" for the plugin.
-
-## Developer Notes
-
-This project is built using **JUCE 7** and **CMake**. It bridges legacy C-based pitch algorithms with modern C++ plugin wrappers.
-
-### Architecture & Dependencies
-
-The plugin relies on several high-performance audio libraries:
-- **RubberBand**: Used for high-quality time-stretching and pitch-shifting.
-- **SoundTouch**: Provides an alternative pitch-shifting engine.
-- **Aubio**: Real-time pitch detection (YIN/FFT based).
-- **FFTW3**: Handles fast Fourier transforms for spectral processing.
-
-On macOS, these are typically installed via Homebrew for development, but the `build_macos.sh` script is designed to make the final plugin **self-contained**.
-
-### macOS Bundling & Signing (Important)
-
-Standard macOS plugins are often dynamically linked to Homebrew libraries, which causes them to crash on other users' machines. Our build process handles this automatically:
-1. **Framework Bundling**: Copies `.dylib` files from `/opt/homebrew/` into the plugin's `Contents/Frameworks/` directory.
-2. **RPath Fixing**: Uses `install_name_tool` to change the load paths from absolute paths to `@loader_path/../Frameworks/`.
-3. **Deep Signing**: Since ad-hoc signing on macOS is strict, we sign the internal dylibs individually before performing a "deep" signature on the entire `.vst3` or `.component` bundle.
-
-### JUCE & macOS 15 Compatibility
-
-JUCE 7.0.5 has a known issue with `CGWindowListCreateImage` on macOS 15 Sequoia (where the API was deprecated/removed). The `build_macos.sh` script includes a Python-based patcher that automatically guards this call in the JUCE source code before building to ensure stability on the latest macOS versions.
-
-### Projucer vs CMake
-
-While the project uses a `.jucer` file to manage JUCE modules, the actual build orchestration is handled by `CMakeLists.txt`. The `build_macos.sh` script runs the Projucer CLI to regenerate the `JuceLibraryCode` before handing off the build to CMake.
-
-## Hot keys
+### Hot keys
 
 - `alt + mouse wheel` — x zoom
 - `ctrl + mouse wheel` — y zoom
@@ -81,34 +50,65 @@ While the project uses a `.jucer` file to manage JUCE modules, the actual build 
 - `left button drag` — add note
 - `right button` — delete note
 
+---
+
 ## Building from source
 
 ### macOS
-
 Prerequisites: Homebrew, Xcode command-line tools, CMake, Git.
-
 ```bash
 ./build_macos.sh
 ```
 
-The script installs dependencies, downloads JUCE 7.0.5, applies the macOS 15+ compatibility patch, clones the VST3 SDK, builds, and installs the plugin to `/Library/Audio/Plug-Ins/VST3/`.
+### Windows (MSYS2 / MinGW-w64)
+Prerequisites: [MSYS2](https://www.msys2.org/), MINGW64 environment.
+```bash
+./build_windows.sh
+```
 
 ### Linux
-
+Prerequisites: GCC, CMake, pkg-config, and development headers for FFTW, SoundTouch, etc.
 ```bash
-sudo apt install libfftw3-dev libsamplerate0-dev libaubio-dev \
-  libsoundtouch-dev librubberband-dev libx11-dev libxext-dev \
-  libxrandr-dev libfreetype-dev libasound2-dev cmake pkg-config
 ./build_linux.sh
 ```
 
-### Windows (MSYS2 / MinGW-w64)
+---
 
-```bash
-pacman -S mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake \
-  mingw-w64-x86_64-fftw mingw-w64-x86_64-aubio \
-  mingw-w64-x86_64-soundtouch mingw-w64-x86_64-rubberband
-mkdir build-cmake && cd build-cmake
-cmake .. -DCMAKE_CXX_COMPILER=g++ -DCMAKE_C_COMPILER=gcc -G "Unix Makefiles"
-make -j$(nproc)
-```
+## Developer Notes
+
+This project is built using **JUCE 7** and **CMake**. It bridges legacy C-based pitch algorithms with modern C++ plugin wrappers.
+
+### Architecture & Dependencies
+The plugin relies on several high-performance audio libraries:
+- **RubberBand**: High-quality time-stretching and pitch-shifting.
+- **SoundTouch**: Alternative pitch-shifting engine.
+- **Aubio**: Real-time pitch detection (YIN/FFT based).
+- **FFTW3**: Fast Fourier transforms for spectral processing.
+
+### Platform-Specific Details
+
+#### macOS (Self-Contained Bundles)
+Standard macOS plugins are often dynamically linked to Homebrew libraries, which causes them to crash on other users' machines. Our `build_macos.sh` script handles this:
+1. **Framework Bundling**: Copies `.dylib` files from `/opt/homebrew/` into the plugin's `Contents/Frameworks/` directory.
+2. **RPath Fixing**: Uses `install_name_tool` to change load paths to `@loader_path/../Frameworks/`.
+3. **Deep Signing**: Signs internal dylibs individually before performing a "deep" signature on the bundle.
+
+#### Windows (Static Linking)
+On Windows, we prefer **static linking** to avoid "missing DLL" issues. The `CMakeLists.txt` is configured to link dependencies statically when building with MinGW/MSYS2.
+
+#### Linux
+Linux builds generate a standard `.so` binary within a `.vst3` bundle structure, following the VST3 SDK specification.
+
+### JUCE & macOS 15 Compatibility
+JUCE 7.0.5 has a known issue with `CGWindowListCreateImage` on macOS 15 Sequoia. Our build script includes a patcher that automatically guards this call in the JUCE source code before building.
+
+---
+
+## Troubleshooting
+
+If the plugin fails to load or shows as "incompatible":
+
+1. **DAW Cache**: Most DAWs (like REAPER, Ableton, or Logic) cache failed plugin scans. You must **"Clear Cache and Rescan"** in your DAW preferences after an update.
+2. **macOS Permissions**: If you get a "Developer cannot be verified" message, go to **System Settings > Privacy & Security** and click "Allow Anyway".
+3. **macOS Validation**: Try running `auval -v aufx MXTn Manu` in a terminal to see if the system reports any signature or dependency errors.
+4. **Linux Dependencies**: Ensure you have installed the required runtime libraries (FFTW3, SoundTouch, etc.) as the Linux build is currently dynamically linked.
