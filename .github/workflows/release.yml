@@ -55,12 +55,16 @@ jobs:
           echo "version=${NEW_VERSION}" >> $GITHUB_OUTPUT
           echo "Bumped ${CURRENT} → ${NEW_VERSION}"
 
+      - name: Update Changelog
+        run: |
+          python3 scripts/update_changelog.py
+
       - name: Commit and push bumped version
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git commit -m "chore: bump version to $(cat VERSION) [skip ci]"
+          git add VERSION CHANGELOG.md
+          git commit -m "chore: bump version to $(cat VERSION) and update changelog [skip ci]"
           git push origin master
 
   # ---------------------------------------------------------------------------
