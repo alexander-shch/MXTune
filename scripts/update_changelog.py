@@ -87,6 +87,10 @@ def update_changelog(version, sections):
     if empty:
         new_entry += "_No significant changes documented._\n\n"
 
+    # Save the new entry for GitHub Release body
+    with open("LATEST_RELEASE_NOTES.md", "w") as f:
+        f.write(new_entry)
+
     with open("CHANGELOG.md", "r") as f:
         content = f.read()
 

@@ -59,6 +59,12 @@ jobs:
         run: |
           python3 scripts/update_changelog.py
 
+      - name: Upload Release Notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: LATEST_RELEASE_NOTES.md
+
       - name: Commit and push bumped version
         run: |
           git config user.name "github-actions[bot]"
@@ -394,25 +400,31 @@ jobs:
           path: ./artifacts
           merge-multiple: true
 
+      - name: Prepare Release Body
+        run: |
+          # Combine the version header with the installation instructions
+          cat artifacts/LATEST_RELEASE_NOTES.md > FULL_RELEASE_NOTES.md
+          cat >> FULL_RELEASE_NOTES.md <<EOF
+
+### Installation
+
+**macOS** — extract \`MXTune-*-macos.zip\`:
+- VST3: move \`mx_tune-*.vst3\` to \`/Library/Audio/Plug-Ins/VST3/\`
+- AU: move \`mx_tune-*.component\` to \`/Library/Audio/Plug-Ins/Components/\`
+
+Rescan plugins in your DAW.
+
+**Windows** — extract \`MXTune-*-windows.zip\`, move the \`.vst3\` folder to \`C:\Program Files\Common Files\VST3/\`, rescan in your DAW.
+
+**Linux** — extract \`MXTune-*-linux.zip\`, move the \`.vst3\` folder to \`~/.vst3/\` or \`/usr/lib/vst3/\`, rescan in your DAW.
+EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare.outputs.version }}
           name: MXTune v${{ needs.prepare.outputs.version }}
-          body: |
-            ## MXTune v${{ needs.prepare.outputs.version }}
-
-            ### Installation
-
-            **macOS** — extract `MXTune-*-macos.zip`:
-            - VST3: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
-            - AU: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
-
-            Rescan plugins in your DAW.
-
-            **Windows** — extract `MXTune-*-windows.zip`, move the `.vst3` folder to `C:\Program Files\Common Files\VST3\`, rescan in your DAW.
-
-            **Linux** — extract `MXTune-*-linux.zip`, move the `.vst3` folder to `~/.vst3/` or `/usr/lib/vst3/`, rescan in your DAW.
+          body_path: FULL_RELEASE_NOTES.md
           files: |
             artifacts/MXTune-*-macos.zip
             artifacts/MXTune-*-windows.zip
