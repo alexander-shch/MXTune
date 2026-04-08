@@ -76,6 +76,26 @@ Prerequisites: GCC, CMake, pkg-config, and development headers for FFTW, SoundTo
 
 ---
 
+## Roadmap
+
+### Phase 1: ARA Integration (In progress)
+MXTune is transitioning to **ARA (Audio Random Access)** support to enable full-track audio access and offline analysis, moving beyond real-time buffer-limited scanning.
+
+**Key improvements:**
+- Full-track pitch analysis regardless of playhead position
+- Foundation for advanced editing features: vibrato control, phrase/syllable timing, tempo detection, and beat alignment
+
+**Upcoming phases:**
+- Phase 2: Full-track analysis pipeline
+- Phase 3: Vibrato correction and control
+- Phase 4: Phrase/syllable time-stretch editing
+- Phase 5: Tempo detection and beat alignment
+- Phase 6: Multi-host optimization and stabilization
+
+For detailed implementation roadmap, milestones, gotchas, and feature specs, see [plans/ARA_IMPLEMENTATION_PLAN.md](./plans/ARA_IMPLEMENTATION_PLAN.md).
+
+---
+
 ## Developer Notes
 
 This project is built using **JUCE 7** and **CMake**. It bridges legacy C-based pitch algorithms with modern C++ plugin wrappers.
