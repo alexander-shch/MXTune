@@ -129,6 +129,7 @@ echo_step "Installing VST3 bundle to $VST3_BUNDLE ..."
 
 sudo rm -rf "$VST3_BUNDLE"
 sudo mkdir -p "$VST3_BUNDLE/Contents/MacOS"
+sudo mkdir -p "$VST3_BUNDLE/Contents/Frameworks"
 
 # Copy the dylib as the bundle executable (no extension, named after the plugin)
 sudo cp "$SCRIPT_DIR/build-cmake/libmx_tune.dylib" "$VST3_BUNDLE/Contents/MacOS/mx_tune"
@@ -164,11 +165,6 @@ sudo tee "$VST3_BUNDLE/Contents/Info.plist" > /dev/null << PLIST
 PLIST
 
 printf "BNDLMXTn" | sudo tee "$VST3_BUNDLE/Contents/PkgInfo" > /dev/null
-sudo chown -R root:wheel "$VST3_BUNDLE"
-sudo codesign --force --sign - "$VST3_BUNDLE"
-sudo chmod -R 755 "$VST3_BUNDLE"
-
-echo_step "Done! MXTune ${PLUGIN_VERSION} VST3 installed to $VST3_BUNDLE"
 
 # ---------------------------------------------------------------------------
 # 6. Install AU component bundle
@@ -181,6 +177,7 @@ echo_step "Installing AU component to $AU_BUNDLE ..."
 
 sudo rm -rf "$AU_BUNDLE"
 sudo mkdir -p "$AU_BUNDLE/Contents/MacOS"
+sudo mkdir -p "$AU_BUNDLE/Contents/Frameworks"
 sudo cp "$SCRIPT_DIR/build-cmake/libmx_tune.dylib" "$AU_BUNDLE/Contents/MacOS/mx_tune"
 
 sudo tee "$AU_BUNDLE/Contents/Info.plist" > /dev/null <<AUPLIST
@@ -214,9 +211,50 @@ sudo tee "$AU_BUNDLE/Contents/Info.plist" > /dev/null <<AUPLIST
 AUPLIST
 
 printf "BNDLManu" | sudo tee "$AU_BUNDLE/Contents/PkgInfo" > /dev/null
-sudo chown -R root:wheel "$AU_BUNDLE"
-sudo codesign --force --sign - "$AU_BUNDLE"
-sudo chmod -R 755 "$AU_BUNDLE"
 
+# ---------------------------------------------------------------------------
+# 7. Bundle Dependencies & Fix RPaths
+# ---------------------------------------------------------------------------
+echo_step "Bundling dependencies and fixing RPaths..."
+
+LIBS=(
+    "rubberband/lib/librubberband.3.dylib"
+    "sound-touch/lib/libSoundTouch.1.dylib"
+    "aubio/lib/libaubio.5.dylib"
+    "fftw/lib/libfftw3f.3.dylib"
+)
+
+for bundle in "$VST3_BUNDLE" "$AU_BUNDLE"; do
+    binary="$bundle/Contents/MacOS/mx_tune"
+    frameworks="$bundle/Contents/Frameworks"
+
+    for lib_rel_path in "${LIBS[@]}"; do
+        lib_name=$(basename "$lib_rel_path")
+        full_lib_path="/opt/homebrew/opt/$lib_rel_path"
+
+        # Copy the dylib into the bundle
+        sudo cp "$full_lib_path" "$frameworks/"
+        sudo chmod 644 "$frameworks/$lib_name"
+
+        # Update the internal ID of the copied dylib
+        sudo install_name_tool -id "@loader_path/../Frameworks/$lib_name" "$frameworks/$lib_name"
+
+        # Update the plugin's reference to this dylib
+        sudo install_name_tool -change "$full_lib_path" "@loader_path/../Frameworks/$lib_name" "$binary"
+    done
+
+    # Sign the dylibs first
+    for lib_rel_path in "${LIBS[@]}"; do
+        lib_name=$(basename "$lib_rel_path")
+        sudo codesign --force --sign - "$frameworks/$lib_name"
+    done
+
+    # Re-sign the bundle after all changes
+    sudo chown -R root:wheel "$bundle"
+    sudo codesign --force --sign - --deep "$bundle"
+    sudo chmod -R 755 "$bundle"
+done
+
+echo_step "Done! MXTune ${PLUGIN_VERSION} VST3 installed to $VST3_BUNDLE"
 echo_step "Done! MXTune ${PLUGIN_VERSION} AU installed to $AU_BUNDLE"
 echo_step "In Logic/GarageBand: rescan plugins, look for 'MXTune: Pitch Correction'"
