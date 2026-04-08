@@ -1,10 +1,3 @@
-Here is the complete, single-file Markdown script. You can copy this entire block and save it as `TEST_CASES.md` in your project root. 
-
-It is designed to be a "living document" that bridges the gap between your **C++ logic (Aubio/SoundTouch)** and the **ARA 2/JUCE** container requirements.
-
----
-
-```markdown
 # MXTune: Comprehensive ARA 2 & Vocal DSP Test Suite
 
 This document defines the mandatory validation scenarios for **MXTune**. All major commits must pass the "Core Logic" tests, and all releases must pass the "ARA Timeline" gauntlet.
@@ -82,7 +75,3 @@ This document defines the mandatory validation scenarios for **MXTune**. All maj
 4. [ ] **Automation:** Automating the "Correction Amount" while the playhead crosses a region boundary.
 
 ---
-
-### Dev Monologue:
-> Keep the `TestAssets` folder clean. If a specific vocal take causes a crash in REAPER, save that clip, add it to the unit tests, and don't touch the ARA code again until the **ConsoleTester** can process that clip without barfing.
-```
