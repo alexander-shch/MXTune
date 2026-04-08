@@ -21,10 +21,13 @@ add_executable(mxtune_tests
     test_ring_buffer.cpp
     test_undo_redo.cpp
     test_auto_tune.cpp
+    test_manual_tune.cpp
     ${SRC_DIR}/midi_msg.cpp
     ${SRC_DIR}/delay.cpp
     ${SRC_DIR}/ring_buffer.cpp
     ${SRC_DIR}/auto_tune.cpp
+    ${SRC_DIR}/manual_tune.cpp
+    ${SRC_DIR}/undo_redo.cpp
 )
 
 target_include_directories(mxtune_tests PRIVATE ${SRC_DIR})

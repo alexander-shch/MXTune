@@ -420,6 +420,8 @@ PluginGui::PluginGui (AutotalentAudioProcessor& p)
     //[UserPreSize]
     //[/UserPreSize]
 
+    setResizable(true, true);
+    setResizeLimits(860, 600, 10000, 10000);
     setSize (860, 600);
 
 
@@ -495,7 +497,7 @@ void PluginGui::paint (Graphics& g)
     g.fillAll (Colour (0xff323e44));
 
     {
-        int x = 152, y = 112, width = 696, height = 472;
+        int x = 152, y = 112, width = getWidth() - 164, height = getHeight() - 128;
         Colour fillColour = Colour (0x04000000);
         //[UserPaintCustomArguments] Customize the painting arguments here..
         _draw_x = x + 24;
@@ -542,9 +544,10 @@ void PluginGui::paint (Graphics& g)
 
     // draw position
     {
-        bool is_playing = _proc.is_playing();
-
         _cur_time = _proc.get_cur_time();
+#if !JUCE_STANDALONE_APPLICATION
+        // In a DAW, auto-scroll the view to follow the playhead
+        bool is_playing = _proc.is_playing();
         if (is_playing)
         {
             float diff = _time_right - _time_left;
@@ -554,6 +557,7 @@ void PluginGui::paint (Graphics& g)
                 _time_right = _time_left + diff;
             }
         }
+#endif
 
         float x = _time_to_x(_cur_time);
         float y1 = _pitch_to_y(_pitch_up);
@@ -571,14 +575,15 @@ void PluginGui::paint (Graphics& g)
         double bpm = _proc.get_bpm();
         (void)_proc.get_time_sig_denominator();
         double ppq_pos = _proc.get_ppq_position();
+        if (bpm < 1.0) bpm = 120.0;
         double note_time_len = 60. / bpm;
-        float ppq_time = _cur_time - ppq_pos * note_time_len;
+        float ppq_time = _cur_time - (float)(ppq_pos * note_time_len);
 
         float y1 = _pitch_to_y(_pitch_up);
         float y2 = _pitch_to_y(_pitch_down);
         double step_time = note_time_len;
 
-        for (float t = ppq_time; t < _time_right; t += step_time)
+        for (float t = ppq_time; t < _time_right; t += (float)step_time)
         {
             float x = _time_to_x(t);
             if (x > _draw_x && x < _draw_x + _draw_w)
@@ -589,63 +594,56 @@ void PluginGui::paint (Graphics& g)
         }
     }
 
-    // draw selected note
+    // draw selected note (blob style)
     if (_new_tune || _modify_tune)
     {
-        float start_x = _time_to_x(_cur_node->time_start);
-        float end_x = _time_to_x(_cur_node->time_end);
-        float start_y = _pitch_to_y(_cur_node->pitch_start);
-        float end_y = _pitch_to_y(_cur_node->pitch_end);
-        _draw_note_limit(start_x, start_y, end_x, end_y);
-        g.setColour (juce::Colours::red);
-        g.setOpacity(0.5);
-        g.drawLine(start_x, start_y, end_x, end_y, 12);
+        float row_h = (_draw_h - _margin) / (float)(_pitch_up - _pitch_down);
+        float half_h = row_h * 0.45f;
 
+        float x0 = _time_to_x(_cur_node->time_start);
+        float x1 = _time_to_x(_cur_node->time_end);
+        if (x0 > x1) std::swap(x0, x1);
+        float y_center = _pitch_to_y(_cur_node->pitch_start);
 
+        x0 = jmax(x0, (float)_draw_x);
+        x1 = jmin(x1, (float)(_draw_x + _draw_w));
+
+        if (x1 > x0)
         {
-            int x = end_x;
-            int y = end_y;
-            int width = 80;
-            int height = 30;
+            g.setColour(juce::Colours::red);
+            g.setOpacity(0.7f);
+            g.fillRoundedRectangle(x0, y_center - half_h, x1 - x0, half_h * 2.f, 3.f);
 
             char str[32] = {0};
-            if (_cur_node->time_end > _cur_node->time_start)
-            {
-                snprintf(str, sizeof(str), "%u(ms)", (std::uint32_t)((_cur_node->time_end - _cur_node->time_start) * 1000));
-            }
-            else
-            {
-                snprintf(str, sizeof(str), "%u(ms)", (std::uint32_t)((_cur_node->time_start - _cur_node->time_end) * 1000));
-            }
-
-            String text (str);
-            Colour fillColour = Colours::black;
-            g.setColour (fillColour);
-            g.setFont (Font (15.00f, Font::plain).withTypefaceStyle ("Regular"));
-            g.drawText (text, x, y, width, height,
-                        Justification::centred, true);
+            snprintf(str, sizeof(str), "%u ms", (std::uint32_t)(std::fabs(_cur_node->time_end - _cur_node->time_start) * 1000));
+            g.setColour(juce::Colours::white);
+            g.setOpacity(1.0f);
+            g.setFont(Font(12.0f, Font::plain));
+            g.drawText(String(str), (int)x1 + 2, (int)(y_center - 10), 70, 20, Justification::centredLeft, true);
         }
-
-
     }
 
-    // draw notes
+    // draw notes (blob style)
     {
         std::list<std::shared_ptr<manual_tune::tune_node> > list =
             _proc.get_manual_tune().get_tune(_time_left, _time_right);
 
+        float row_h = (_draw_h - _margin) / (float)(_pitch_up - _pitch_down);
+        float half_h = row_h * 0.45f;
 
-        g.setColour (juce::Colours::orange);
-        g.setOpacity(0.5);
-        for (auto i: list)
+        g.setColour(juce::Colours::orange);
+        g.setOpacity(0.5f);
+        for (auto& i : list)
         {
-            float start_x = _time_to_x(i->time_start);
-            float end_x = _time_to_x(i->time_end);
-            float start_y = _pitch_to_y(i->pitch_start);
-            float end_y = _pitch_to_y(i->pitch_end);
+            float x0 = _time_to_x(i->time_start);
+            float x1 = _time_to_x(i->time_end);
+            float y_center = _pitch_to_y((i->pitch_start + i->pitch_end) * 0.5f);
 
-            _draw_note_limit(start_x, start_y, end_x, end_y);
-            g.drawLine(start_x, start_y, end_x, end_y, 12);
+            x0 = jmax(x0, (float)_draw_x);
+            x1 = jmin(x1, (float)(_draw_x + _draw_w));
+            if (x1 <= x0) continue;
+
+            g.fillRoundedRectangle(x0, y_center - half_h, x1 - x0, half_h * 2.f, 3.f);
         }
     }
 
@@ -730,6 +728,32 @@ void PluginGui::resized()
     //[/UserPreResize]
 
     //[UserResized] Add your own custom resize handling here..
+    int w = getWidth();
+    int h = getHeight();
+
+    // Graph background groups — expand to fill available space
+    groupComponent6->setBounds(144, 96, w - 148, h - 100);
+    groupComponent5->setBounds(144, 96, w - 148, h - 100);
+
+    // Right-anchored top-bar controls (preserve original right margins from 860px window)
+    groupComponent4->setBounds(248, 8, w - 252, 88);
+    textButtonUndoNote->setBounds(w - 308, 24, 64, 24);
+    textButtonRedoNote->setBounds(w - 308, 64, 64, 24);
+    textButtonSnapKey->setBounds(w - 236, 24, 80, 24);
+    textButtonCANote->setBounds(w - 236, 64, 80, 24);
+    toggleButtonTrack->setBounds(w - 148, 24, 64, 24);
+    textButtonClearNote->setBounds(w - 148, 64, 64, 24);
+    toggleButtonSnap->setBounds(w - 76, 24, 64, 24);
+    textButtonClearPitch->setBounds(w - 76, 64, 64, 24);
+
+    // Bottom-left panel — pin to bottom
+    int g3y = h - 192;
+    groupComponent3->setBounds(8, g3y, 136, 184);
+    label3->setBounds(16, g3y + 24, 56, 24);
+    sliderMinLen->setBounds(80, g3y + 24, 48, 24);
+    label11->setBounds(16, g3y + 56, 56, 24);
+    sliderMaxInterval->setBounds(80, g3y + 56, 48, 24);
+    textButtonSetting->setBounds(24, g3y + 104, 104, 40);
     //[/UserResized]
 }
 
@@ -1242,15 +1266,7 @@ void PluginGui::mouseDrag (const MouseEvent& e)
         if (_new_tune)
         {
             _cur_node->time_end = _x_to_time(x);
-
-            if (_proc.get_parameter(AutotalentAudioProcessor::PARAMETER_ID_SNAP) > 0.)
-            {
-                _cur_node->pitch_end = _cur_node->pitch_start;
-            }
-            else
-            {
-                _cur_node->pitch_end = _y_to_pitch(y);
-            }
+            _cur_node->pitch_end = _cur_node->pitch_start;
         }
         else if (_modify_tune)
         {

@@ -305,14 +305,12 @@ std::shared_ptr<manual_tune::tune_node> manual_tune::select_tune(float time, flo
         return std::shared_ptr<tune_node>();
     }
     
-    float x0 = node->time_start;
     float y0 = node->pitch_start;
-    float x1 = node->time_end;
     float y1 = node->pitch_end;
-    
-    float y = y0 + (y1 - y0) / (x1 - x0) * (time - x0);
-    
-    if (abs(y - pitch) < 0.2)
+
+    float center = (y0 + y1) * 0.5f;
+
+    if (std::fabs(center - pitch) < 0.5f)
     {
         float len = node->time_end - node->time_start;
         float left = node->time_start + len * 0.2;
