@@ -78,3 +78,40 @@ TEST_CASE("auto_tune C# is pulled toward adjacent scale notes in C major", "[aut
     REQUIRE(result >= 0.0f);
     REQUIRE(result <= 2.0f);
 }
+
+TEST_CASE("auto_tune amount=0 disables correction — out-of-key note unchanged", "[auto_tune]") {
+    auto_tune at;
+    at.set_note(c_major);
+    at.set_amount(0.0f);
+    // C# is out of C major but amount=0 means no snapping applied
+    REQUIRE(at.tune(1.0f) == Catch::Approx(1.0f).margin(0.01f));
+}
+
+TEST_CASE("auto_tune pull=0.5 blends input and fixed pitch", "[auto_tune]") {
+    auto_tune at;
+    at.set_note(no_snap);
+    at.set_pull(0.5f);
+    at.set_fixed(10.0f);
+    // outpitch before correction = 0.5*0 + 0.5*10 = 5.0; no_snap → no further correction
+    REQUIRE(at.tune(0.0f) == Catch::Approx(5.0f).margin(0.01f));
+}
+
+TEST_CASE("auto_tune all-negative scale falls back to chromatic", "[auto_tune]") {
+    static int empty_scale[12] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+    auto_tune at;
+    at.set_note(empty_scale);
+    at.set_amount(1.0f);
+    // Chromatic fallback: every semitone is a valid target, C# lands on C#
+    REQUIRE(at.tune(1.0f) == Catch::Approx(1.0f).margin(0.01f));
+    REQUIRE(at.tune(0.0f) == Catch::Approx(0.0f).margin(0.01f));
+}
+
+TEST_CASE("auto_tune amount=1 pulls note toward nearest scale note", "[auto_tune]") {
+    auto_tune at;
+    at.set_note(c_major);
+    at.set_amount(1.0f);
+    // 0.1 semitones above C — closer to C than to D, so correction pulls it toward C (0)
+    float result = at.tune(0.1f);
+    REQUIRE(result >= 0.0f);       // not below C
+    REQUIRE(result < 0.1f);        // pulled toward C, not left at input
+}
