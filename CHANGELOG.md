@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.29] - 2026-04-08
+
+### Added
+- Note blob UI, resizable window, macOS standalone app, AU format (feat)
+
+### Other
+- Add ccache to all platforms to speed up PR builds (ci)
+- Add unit tests for manual_tune and auto_tune (test)
+- Add PR build workflow with unit tests and compile checks (ci)
+
 ## [1.2.28] - 2026-04-08
 
 ### Other
