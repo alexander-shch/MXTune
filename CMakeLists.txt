@@ -337,6 +337,38 @@ IF (WIN32)
     )
 
 ELSEIF (APPLE)
+
+    # Standalone app target — lets you run MXTune directly without a DAW
+    set(STANDALONE_EXTRA_SRCS
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/include_juce_audio_devices.mm"
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/include_juce_audio_formats.mm"
+        "${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/include_juce_audio_utils.mm"
+    )
+    set_source_files_properties(${STANDALONE_EXTRA_SRCS} PROPERTIES COMPILE_FLAGS "-w")
+
+    add_executable(MXTune MACOSX_BUNDLE ${RC_SRCS} ${CXX_SRCS} ${C_SRCS} ${ASM_SRCS} ${STANDALONE_EXTRA_SRCS})
+    target_compile_definitions(MXTune PRIVATE
+        JucePlugin_Build_Standalone=1
+        JUCE_MODULE_AVAILABLE_juce_audio_devices=1
+        JUCE_MODULE_AVAILABLE_juce_audio_formats=1
+        JUCE_MODULE_AVAILABLE_juce_audio_utils=1
+    )
+    target_include_directories(MXTune SYSTEM PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/third_party/JUCE/modules"
+    )
+    target_link_libraries(MXTune ${LINK_OPTIONS}
+        "-framework CoreAudioKit"
+        "-framework DiscRecording"
+    )
+    set_target_properties(MXTune PROPERTIES
+        OUTPUT_NAME "MXTune"
+        MACOSX_BUNDLE_BUNDLE_NAME "MXTune"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${MXTUNE_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${MXTUNE_VERSION}"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.mxtune.standalone"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/JUCE/Source/standalone_Info.plist"
+    )
+
 ELSEIF (UNIX)
     set_target_properties(mx_tune PROPERTIES
         NO_SONAME TRUE

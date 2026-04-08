@@ -31,6 +31,8 @@ Extract the `.zip`:
 - **VST3**: move `mx_tune-*.vst3` to `/Library/Audio/Plug-Ins/VST3/`
 - **AU**: move `mx_tune-*.component` to `/Library/Audio/Plug-Ins/Components/`
 
+Rescan plugins in your DAW.
+
 ### Windows
 Extract the `.zip`, move the `.vst3` folder to `C:\Program Files\Common Files\VST3\`.
 
