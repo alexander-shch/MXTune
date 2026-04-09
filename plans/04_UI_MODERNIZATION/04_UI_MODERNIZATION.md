@@ -23,8 +23,6 @@ intact.
 
 ![MXTune UI Mockup](./mockup_figma.png)
 
-*Built in Figma — [open file](https://www.figma.com/design/NV6Z0zQPypDHs8pPPsKBHS) · `mockup_figma.png` in this folder.*
-
 ---
 
 ## Design System
