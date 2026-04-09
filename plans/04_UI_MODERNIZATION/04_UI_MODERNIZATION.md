@@ -21,9 +21,7 @@ intact.
 
 ## Reference Design
 
-![MXTune UI Mockup](./mockup_v2.png)
-
-*Generated with Pencil AI — `mockup_v2.png` in this folder.*
+*Built in Figma — [open file](https://www.figma.com/design/NV6Z0zQPypDHs8pPPsKBHS)*
 
 ---
 
