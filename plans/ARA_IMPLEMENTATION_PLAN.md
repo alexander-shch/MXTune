@@ -1,202 +1,379 @@
-# ARA Implementation Plan
+# MXTune ARA Implementation Plan (JUCE 8 Edition)
 
-## Purpose
-This plan describes the changes needed to migrate MXTune from processBlock-based buffer-limited scanning to JUCE ARA-based full-track audio access and offline analysis.
+> Last updated after code audit of `src/mx_tune.cpp`, `src/ring_buffer.h`,
+> `src/pitch_detector.h`, and `JUCE/Source/PluginProcessor.cpp`.
 
-## Goals
-- Enable ARA support in the plugin build
-- Replace the current ring-buffer analysis path with ARA document/audio source access
-- Support full-clip or full-track analysis regardless of playhead position
-- Keep UI update flow responsive by using background analysis and ARA document change notifications
+---
 
-## Prerequisites
-- Confirm JUCE ARA support is available in the current JUCE modules and build environment
-- Confirm the ARA SDK path can be set for the build system
-- Ensure the plugin target is compatible with ARA in the chosen formats (VST3, AU, etc.)
-- Review current `JUCE/JuceLibraryCode/JucePluginDefines.h` settings for `JucePlugin_Enable_ARA` and ARA content flags
+## 1. Purpose & Core Goals
 
-## Key concepts
-- `ARADocumentControllerSpecialisation`: plugin-side class responsible for creating ARA documents and managing host interactions
-- `ARADocumentController::createARAFactory()`: global entry point required by JUCE ARA plugins
-- `juce::ARAAudioSource`: provides access to full audio source data for scanning, not only live processBlock buffers
-- ARA document lifecycle: capture, clone, edit, render, and clean up document data in the plugin
+Migrate MXTune from its current real-time `processBlock` scanning model to a
+**JUCE 8 ARA (Audio Random Access)** architecture, enabling full-clip analysis
+independent of playback.
 
-## Implementation steps
+- **Full-Clip Analysis:** Drive `mx_tune`'s pitch detector from an
+  `ARAAudioSourceReader` instead of waiting for the host to play audio through
+  `processBlock`.
+- **Non-Destructive Editing:** Expose pitch corrections through the ARA Document
+  model so the host (Logic Pro, Studio One, Reaper) owns the clip state.
+- **Modernized UI:** Leverage JUCE 8's Metal (macOS) and Direct2D (Windows)
+  backends for the pitch grid and waveform overlay.
 
-### 1. Enable ARA support in the build
-- Set `JucePlugin_Enable_ARA` to `1` in `JUCE/JuceLibraryCode/JucePluginDefines.h`
-- Add or configure `JucePlugin_ARAContentTypes` with supported content types, e.g. `jura::ARAContentType::audio` or equivalent
-- Add `JucePlugin_ARATransformationFlags` if needed for clip playback and audio read access
-- Update `CMakeLists.txt` to set the ARA SDK path using `juce_set_ara_sdk_path()` or equivalent macro
-- Ensure the JUCE module list includes any ARA-related modules required by JUCE 8/9+ (e.g. `juce_audio_utils` or `juce_ara` if separate)
+---
 
-### 2. Add ARA document controller integration
-- Create a new source file for the ARA specialization, e.g. `ARADocumentController.cpp` / `.h`
-- Subclass `juce::ARADocumentControllerSpecialisation<AutotalentAudioProcessor>` or equivalent depending on JUCE version
-- Implement required virtual methods:
-  - `createARAFactory()` global entry point
-  - `getDocumentName()`
-  - `createDocumentController()`
-  - document state and render callbacks as required by JUCE ARA
-- Ensure the document controller is instantiated and connected with the plugin processor
+## 2. What the Code Audit Revealed
 
-### 3. Expose ARA-aware audio source reading
-- Replace or augment `AutotalentAudioProcessor::analyze_current_audio()` to accept a `juce::ARAAudioSource` rather than a raw ring buffer
-- Add a new ARA callback or document render stage where the full source audio is available for analysis
-- Use `ARAAudioSource::createReader()` or `ARAAudioSource::getAudioDataForRange()` to read clip audio in contiguous blocks
-- Convert the read audio frames into the existing `mx_tune` scan path with proper channel handling
+Understanding these facts is required before any implementation work begins.
 
-### 4. Implement offline/full-track scanning
-- Design a scan task that reads the entire clip or selected region before playback
-- Use a background thread or `juce::ThreadPoolJob` to avoid blocking the UI or audio thread
-- Keep the UI responsive by signaling completion via `MessageManagerCallback` or `AsyncUpdater`
-- Continue using existing pitch/note storage structures, but populate them from the ARA source data instead of the live buffer
+### 2.1 `ring_buffer` is NOT the integration point
 
-### 5. Update UI and control flow
-- Keep the existing `Update` button or add a dedicated ARA scan trigger
-- When triggered, start the ARA analysis task and disable UI controls as needed
-- On completion, refresh note/pitch display using `manual_tune` data updated by the scan
-- If the host changes the ARA document or audio source, invalidate cached analysis and rescan as needed
+`ring_buffer` (`src/ring_buffer.h`) is a fixed-size circular buffer used
+**internally by the pitch detector implementations** as their sample window.
+It is not a queue between `processBlock` and the analysis engine.
 
-## Important gotchas and potential issues
-- ARA requires a compatible host and plugin registration; the plugin may still need to support non-ARA hosts gracefully
-- ARA plugin entry points and ARA controller creation must match JUCE version-specific APIs exactly
-- `processBlock()` may still be called for host playback; the plugin must continue audio processing correctly while the ARA scan is performed separately
-- ARA audio source access can be expensive if reading an entire track; use chunked reads and avoid repeated full-track reads
-- Thread-safety: the analysis task must not access audio-engine state from the audio thread, and UI updates must happen on the message thread
-- Sample rate/buffer size differences: the ARA audio source may expose a different sample rate than the current playback context; ensure `mx_tune` receives consistent sample-rate-aligned data
-- Clip/region boundaries: the ARA source may present audio as multiple clips or sources; the scan implementation should normalize this into a single contiguous analysis stream if the plugin expects it
-- State sync: host and ARA document changes can occur asynchronously; add defensive checks for invalidated documents during scan operations
-- Build configuration mismatch: ARA SDK path or missing module support will lead to build failures that may be subtle and platform-specific
-- Plugin metadata and format restrictions: not every format supports ARA or ARA document-based workflows equally
+The actual integration point is `mx_tune::run()`:
 
-## What to be aware of during implementation
-- Preserve existing non-ARA functionality for hosts that do not support ARA unless the plugin intentionally becomes ARA-only
-- Keep the current scanning logic in place long enough for comparison and fallback testing
-- Do not assume the ARA document contains audio for the entire project; the host may expose only selected clips or affected ranges
-- Validate that `ARAAudioSource` returns samples in the expected channel layout and that mono/stereo handling stays consistent
-- Use JUCE logging or debug output while first reading ARA data to verify source length, sample rate, channels, and frame ranges
-- Test with multiple hosts, especially those known to support ARA (e.g. Logic Pro, Pro Tools, Studio One) and non-ARA hosts
-- Consider how this change affects automation, undo/redo, and plugin state serialization
-- Design the data flow so that ARA-driven scan results can be reused for later editing operations
+```cpp
+// src/mx_tune.cpp:326
+void mx_tune::run(float* in, float* out, std::int32_t n, float timestamp)
+```
 
-## Future ARA-powered feature expansions
-These features should be built on top of the ARA scan/data pipeline once full-track audio access is available.
+This function already takes a flat `float*` buffer and a timestamp. It has no
+knowledge of where those samples came from. This is the function
+`MXTunePlaybackRegionRenderer` will call, feeding it samples from the ARA
+reader instead of from `processBlock`.
 
-### Vibrato correction / modulation control
-- Use ARA pitch and time data to detect vibrato depth and rate from the scanned audio
-- Provide controls to reduce, preserve, or exaggerate vibrato by adjusting pitch bend and envelope shape
-- Keep vibrato correction separate from pitch correction so the effect can be applied selectively per phrase or syllable
-- Ensure the same scan pipeline can produce both raw pitch information and optional vibrato modulation metadata
+### 2.2 `mx_tune::run()` does detection AND shifting in one pass
 
-### Time changes and phrase lengthening
-- Use full-clip ARA audio access to detect phrase boundaries and rhythmic anchors before editing
-- Allow the user to make a specific word or syllable longer by time-stretching the selected region
-- Implement this as a separate transformation step after pitch analysis, using ARA data to align edits to musical timing
-- Preserve natural timing by respecting phrase context and limiting stretch amount within musical and vocal constraints
+```cpp
+// src/mx_tune.cpp:369 — always runs regardless of _track
+out[i] = _delay.process(_shifter->shifter(in[i]));
+```
 
-### Tempo detection and beat alignment
-- Add a tempo scan stage that analyzes the current beat grid from the section being scanned
-- Use ARA document/beat metadata or derived transient/energy analysis to identify BPM and downbeats
-- Expose a tempo set parameter so the plugin can shift vocal timing toward the detected beat
-- Use beat alignment to make vocals perform more on time while preserving expressive timing in non-critical regions
+The renderer only needs the detection half (the `_m_tune.set_inpitch()` calls
+inside the `if (_track)` block at line 341). Running the full `run()` on the
+background thread would:
+- Waste CPU on pitch shifting samples that are immediately discarded.
+- Write shifted audio into the output buffer unnecessarily.
 
-### Workflow considerations
-- Keep the new ARA features optional so the plugin remains usable for simple pitch-correction tasks
-- Store scan/analysis results in a reusable structure so pitch, vibrato, and timing edits share the same underlying data
-- Design the UI to let users choose between "scan only," "pitch correction," and "timing/tempo" workflows
-- Provide clear indicators when ARA-powered editing is active versus when host playback is simply live-processed
+**Required change:** Add a `scan_only` path to `mx_tune` that runs the
+detector and records `inpitch` but skips the shifter entirely. See §3.2.
 
-## Testing and validation
-- Verify build passes with ARA enabled on macOS and any other supported platforms
-- Validate ARA document creation and host recognition in an ARA-capable DAW
-- Compare scan results between the current ring-buffer approach and the new ARA-based full-track scan
-- Confirm UI refresh occurs after ARA scan completion and note/pitch display uses the new data
-- Test playback through the plugin in both ARA and non-ARA hosts to ensure audio processing remains intact
-- Log or assert document/audio source durations and read ranges during initial development
-- Validate each new feature stage separately:
-  - pitch scan only
-  - vibrato reduction/addition
-  - syllable/phrase lengthening
-  - tempo/beat alignment
+### 2.3 Thread safety: `_m_tune` cannot be shared
 
-## Implementation roadmap: phases and milestones
+`_m_tune` (`manual_tune`) is written by `run()` via `set_inpitch()` and read
+by `processBlock` via `get_outpitch()`. Running the renderer on a background
+thread while `processBlock` runs on the audio thread would be a data race.
 
-### Phase 1: ARA Build & Basic Integration (~1-2 weeks)
-**Objective:** Enable ARA in the build and create a working ARA document controller.
+**Required approach:** The renderer owns a **separate `mx_tune` instance**
+configured for scanning only. When the scan completes, results are merged into
+the processor's live `_m_tune` via `juce::AsyncUpdater`. See §3.3.
 
-- Milestone 1.1: Update build config (CMakeLists.txt, ARA SDK path, plugin defines)
-- Milestone 1.2: Create ARA document controller specialization and factory entry point
-- Milestone 1.3: Verify plugin builds and loads in an ARA host (Logic Pro, Studio One, etc.)
-- Milestone 1.4: Test non-ARA hosts still work (fallback mode)
+### 2.4 Timestamp source changes for the renderer
 
-**Deliverable:** Plugin registers as ARA-capable in host; document/audio source wiring is functional.
+In `PluginProcessor.cpp`, `_cur_time` comes from:
 
-### Phase 2: Full-Track Analysis Pipeline (~2-3 weeks)
-**Objective:** Replace ring-buffer scanning with ARA-based offline full-track analysis.
+```cpp
+// PluginProcessor.cpp:230
+if (auto t = pos->getTimeInSeconds()) _cur_time = *t;
+```
 
-- Milestone 2.1: Implement ARA audio source reading and chunked sample access
-- Milestone 2.2: Port current `analyze_current_audio()` logic to use ARA source data
-- Milestone 2.3: Add background thread task pool for offline scanning
-- Milestone 2.4: Implement UI callback / async update so results display correctly
-- Milestone 2.5: Validate pitch detection output matches or improves vs. ring-buffer approach
+The renderer cannot use the playhead. Instead, it computes timestamps directly
+from the clip's ARA position and the reader's sample offset:
 
-**Deliverable:** Update button scans full clip, populates pitch grid correctly, UI updates on completion.
+```
+clip_time = ara_playback_region.startInAudioModificationTime
+          + (sample_offset / ara_audio_source.getSampleRate())
+```
 
-### Phase 3: Vibrato detection & correction (~2-3 weeks)
-**Objective:** Analyze vibrato characteristics from full-track scan and provide reduction/control.
+### 2.5 Existing class name
 
-- Milestone 3.1: Add vibrato depth/rate detection to pitch analysis pipeline
-- Milestone 3.2: Store vibrato metadata alongside pitch in manual_tune data structure
-- Milestone 3.3: Add vibrato reduction slider to UI
-- Milestone 3.4: Implement vibrato modulation in the pitch shifter or auto-tune stage
-- Milestone 3.5: Test vibrato suppression and add-back workflows
+The processor class in `JUCE/Source/PluginProcessor.cpp` is
+`AutotalentAudioProcessor`, not `MXTuneAudioProcessor`. All class hierarchy
+notes below use the actual names.
 
-**Deliverable:** User can adjust vibrato independently of main pitch correction.
+---
 
-### Phase 4: Time stretch & phrase/syllable editing (~3-4 weeks)
-**Objective:** Allow word or syllable lengthening using full-track timing information.
+## 3. Required Changes to Existing Code
 
-- Milestone 4.1: Analyze phrase boundaries and transients in the ARA source
-- Milestone 4.2: Add syllable/phrase selection UI (click/drag regions on pitch grid)
-- Milestone 4.3: Implement time-stretch for selected regions (preserve naturalness)
-- Milestone 4.4: Synchronize with audio output and Test with various vocal styles
+These are surgical changes to `src/` that must be made **before** the ARA
+renderer can be written.
 
-**Deliverable:** User can select a syllable or word and make it longer/shorter while maintaining vocal quality.
+### 3.1 No changes to `ring_buffer`
 
-### Phase 5: Tempo detection & beat alignment (~2-3 weeks)
-**Objective:** Detect beat grid and align vocal timing to the detected tempo.
+`ring_buffer` is internal detector state and does not need to be touched.
 
-- Milestone 5.1: Implement beat/transient detection from the ARA audio source
-- Milestone 5.2: Extract BPM and downbeat information from the analyzed region
-- Milestone 5.3: Add tempo/beat-alignment UI controls
-- Milestone 5.4: Integrate beat-aligned timing correction into playback
-- Milestone 5.5: Test with various tempos and musical styles
+### 3.2 Add `scan()` to `mx_tune`
 
-**Deliverable:** Plugin can detect and adjust to the current beat; vocalists perform more on time.
+Add a new public method alongside `run()` that runs only the detection and
+`_m_tune.set_inpitch()` path:
 
-### Phase 6: Polish, optimization & multi-host testing (~2-3 weeks)
-**Objective:** Ensure all features work smoothly across hosts and edge cases are handled.
+```cpp
+// Proposed addition to src/mx_tune.h
+void scan(const float* in, std::int32_t n, float timestamp);
+```
 
-- Milestone 6.1: Performance profiling and optimization (memory, CPU, I/O)
-- Milestone 6.2: Test on Logic Pro, Pro Tools, Studio One, and REAPER
-- Milestone 6.3: Handle edge cases (empty clips, very long tracks, session changes)
-- Milestone 6.4: Documentation for users and developers
-- Milestone 6.5: Fix reported issues and finalize release
+Implementation mirrors the detection block inside `run()` but omits the
+`_shifter->shifter()` and `_delay.process()` calls. The `_track` flag must
+be `true` for this to write anything into `_m_tune`.
 
-**Deliverable:** Stable, performant ARA plugin ready for distribution.
+### 3.3 Thread-safe result merging
 
-## Work estimation summary
-- **Total estimated effort:** 12–18 weeks (3–4.5 months) for all phases
-- **Phase 1 (ARA build):** critical, blocks everything else; should be completed first
-- **Phase 2 (full-track scanning):** high value, addresses the core limitation
-- **Phases 3–5:** can be prioritized by user feedback; vibrato is likely most impactful
-- **Phase 6:** ongoing; begin after Phase 2 solid, parallel to Phases 3–5
+The renderer owns its own `mx_tune` instance (`_scan_engine`). After scanning
+a full clip, it publishes the collected `inpitch` data to the audio thread
+through a lock-free structure (e.g., a `juce::AbstractFifo`-backed queue or a
+simple `std::atomic<bool>` swap of a completed result set). The processor
+picks this up in `processBlock` or via `juce::AsyncUpdater`.
 
-## References and useful files
-- `JUCE/JuceLibraryCode/JucePluginDefines.h`
-- `CMakeLists.txt`
-- `src/PluginProcessor.cpp`
-- `src/PluginGui.cpp`
-- `third_party/JUCE/docs/ARA.md`
-- JUCE ARA examples or templates in the JUCE module tree
+---
+
+## 4. Infrastructure Prerequisites
+
+### 4.1 JUCE 8 Upgrade
+
+**This must be completed and merged before any work in this plan begins.**
+
+All JUCE version bump details, VST3 SDK removal, CMake version change, and
+verification steps are documented separately in **`JUCE8_UPGRADE_PLAN.md`**.
+Start ARA work only from a `master` branch that is already on JUCE 8.
+
+### 4.2 ARA SDK as Git Submodule
+
+The ARA SDK is publicly available on GitHub. Add it as a submodule so all
+environments get a consistent version:
+
+```bash
+git submodule add https://github.com/Celemony/ARA_SDK third_party/ARA_SDK
+git submodule update --init --recursive
+```
+
+Add a submodule checkout step to both CI workflows (runs before CMake
+configuration):
+
+```yaml
+- name: Checkout ARA SDK submodule
+  run: git submodule update --init --recursive
+```
+
+### 4.6 ARA CMake Configuration
+
+Before adding arguments, **verify the exact flag names** by searching in your
+local JUCE 8 checkout:
+
+```bash
+grep -n "IS_ARA_EFFECT\|ARA_CONTENT_TYPES\|ARA_TRANSFORMATION" \
+  third_party/JUCE/extras/Build/CMake/JUCEUtils.cmake
+```
+
+Expected additions to `juce_add_plugin()` in `CMakeLists.txt`:
+
+```cmake
+juce_add_plugin(MXTune
+    # ... existing args unchanged ...
+    IS_ARA_EFFECT              TRUE
+    ARA_CONTENT_TYPES          "audio"          # verify exact string
+    ARA_TRANSFORMATION_FLAGS   "clip_playback"  # verify exact string
+)
+
+juce_set_ara_sdk_path("${CMAKE_CURRENT_SOURCE_DIR}/third_party/ARA_SDK")
+```
+
+---
+
+## 5. New Class Hierarchy
+
+| New Class | Base Class | Responsibility |
+|:---|:---|:---|
+| `MXTuneDocumentController` | `juce::ARADocumentControllerSpecialisation` | ARA "brain" — manages host clip ↔ analysis data relationship; owns serialization |
+| `MXTuneAudioModification` | `juce::ARAAudioModification` | Per-clip pitch correction data store (wraps `manual_tune` state) |
+| `MXTunePlaybackRegionRenderer` | `juce::ARAPlaybackRegionRenderer` | **The data bridge.** Owns a scanning `mx_tune` instance; calls `scan()` from a background thread; merges results to the processor |
+
+Modifications to existing classes:
+
+```cpp
+// JUCE/Source/PluginProcessor.cpp
+// Actual class name is AutotalentAudioProcessor
+class AutotalentAudioProcessor
+    : public juce::AudioProcessor
+    , public juce::ARAAudioProcessor   // ADD
+```
+
+```cpp
+// JUCE/Source/PluginEditor.cpp
+class AutotalentAudioProcessorEditor
+    : public juce::AudioProcessorEditor
+    , public juce::ARAEditorView       // ADD
+```
+
+---
+
+## 6. Implementation Roadmap
+
+### Phase 1 — ARA Handshake (~2 weeks)
+
+**Goal:** Plugin appears in the DAW's ARA menu and loads without crashing.
+
+- Add the ARA SDK submodule (§4.5) and CMake flags (§4.6).
+- Implement `MXTuneDocumentController` with a minimal `createARAFactory()`.
+- Wire `getStateInformation` / `setStateInformation` in `PluginProcessor.cpp`
+  to include ARA document archiving alongside the existing tune-state
+  serialization.
+- Keep `processBlock` and the live `mx_tune` instance fully intact — this is
+  the non-ARA fallback path, gated by `isBoundToARA()`.
+- **Validation:** Plugin appears in Logic Pro's ARA menu AND in Studio One's
+  ARA inspector. Load/unload several times without crash.
+
+### Phase 2 — Offline Scanning via PlaybackRegionRenderer (~3 weeks)
+
+**Goal:** Full-clip pitch data available without playback.
+
+**Step A — Add `mx_tune::scan()`** (§3.2)
+
+```cpp
+// src/mx_tune.cpp — new method, detection only
+void mx_tune::scan(const float* in, std::int32_t n, float timestamp)
+{
+    for (std::int32_t i = 0; i < n; i++)
+    {
+        float inpitch, conf;
+        if (_detector->get_pitch(in[i], inpitch, conf))
+        {
+            float time_end   = timestamp + (float)i / (float)_sample_rate;
+            float time_begin = time_end - _detector->get_time();
+            manual_tune::pitch_node node{ conf, inpitch };
+            _m_tune.set_inpitch(time_begin, time_end, node);
+        }
+    }
+}
+```
+
+**Step B — Implement `MXTunePlaybackRegionRenderer::renderPlaybackRegion()`**
+
+```cpp
+void MXTunePlaybackRegionRenderer::renderPlaybackRegion(...)
+{
+    // 1. Get a reader for this audio source
+    auto reader = playbackRegion.getAudioModification()
+                                ->getAudioSource()
+                                ->createReader();
+
+    // 2. Compute clip-relative timestamp base
+    double clipTimeBase = playbackRegion.getStartInAudioModificationTime();
+    double sourceRate   = reader->sampleRate;
+
+    // 3. Pull samples in chunks and feed the scan engine
+    constexpr int CHUNK = 2048;
+    AudioBuffer<float> chunk(1, CHUNK);
+    int64_t pos = 0;
+
+    while (pos < reader->lengthInSamples)
+    {
+        int n = std::min((int64_t)CHUNK, reader->lengthInSamples - pos);
+        reader->read(&chunk, 0, n, pos, true, false);
+
+        double timestamp = clipTimeBase + pos / sourceRate;
+        _scan_engine->scan(chunk.getReadPointer(0), n, (float)timestamp);
+        pos += n;
+    }
+
+    // 4. Trigger async merge into the live processor state
+    _mergeResults();  // posts via juce::AsyncUpdater
+}
+```
+
+**Threading rules:**
+- `MXTunePlaybackRegionRenderer` owns `_scan_engine` — a dedicated `mx_tune`
+  instance with `enable_track(true)` and auto-tune disabled.
+- `_scan_engine` is **never** accessed from the audio thread.
+- The live `AutotalentAudioProcessor::_mx_tune` is **never** accessed from
+  the renderer thread.
+- If `ARAAudioSource::getSampleRate()` ≠ the project sample rate, resample via
+  `juce::ResamplingAudioSource` before calling `scan()`. `libsamplerate` is
+  already linked — the existing `pitch_shifter_smb` resampling code is a
+  reference for the API.
+
+### Phase 3 — Enhanced Metadata (~3 weeks)
+
+**Goal:** Store vibrato shape and transient onsets in the ARA document model.
+
+- **Vibrato extraction:** Post-process the pitch curve stored in `_m_tune`
+  after scanning to detect periodic oscillations. Store depth and rate per
+  note region inside `MXTuneAudioModification`.
+- **Transient detection:** Use aubio's onset detection (already linked) on
+  the same `ARAAudioSourceReader` pass to mark syllable boundaries. These
+  become snap points for Phase 4's time-stretch drag handles.
+
+### Phase 4 — Modernized UI (~4 weeks)
+
+**Goal:** Hardware-accelerated pitch grid and waveform overlay in the ARA
+editor view.
+
+- **Metal / Direct2D:** Enabled automatically by JUCE 8 when the component
+  tree is properly separated from the headless processor. No extra flags.
+- **New animation module:** Replace any `ComponentAnimator` usage in
+  `PluginEditor.cpp` with JUCE 8's cubic-bezier `juce::Animator` for smooth
+  note-snap transitions.
+- **Dynamic timeline scaling:** Respond to host zoom via
+  `ARAEditorView::onUpdatePlaybackRegionProperties()`.
+
+---
+
+## 7. Host Compatibility
+
+| Host | ARA Support | Behaviour |
+|:---|:---|:---|
+| Logic Pro, Studio One | Full ARA 2.0 | Primary targets; full offline scan |
+| Reaper | Full ARA 2.0 | Secondary validation target |
+| Ableton Live 12+ | Limited ARA | Non-ARA `processBlock` fallback required for stability |
+| FL Studio, others | None | Automatic fallback to real-time play-to-scan via `isBoundToARA()` |
+
+The fallback path (`processBlock` + `_track` + live `mx_tune`) must remain
+fully functional throughout all phases.
+
+---
+
+## 8. Risk Register
+
+| Risk | Phase | Mitigation |
+|:---|:---|:---|
+| CMake flag names differ from plan | Phase 1 build | Run the `grep` in §4.6 against actual JUCE 8 `JUCEUtils.cmake` before writing CMake |
+| Sample rate mismatch (ARA source ≠ project) | Phase 2 | Check `ARAAudioSource::getSampleRate()` before every reader session; resample if needed |
+| Data race on `_m_tune` | Phase 2 | Renderer uses isolated `_scan_engine`; merge only via `AsyncUpdater` |
+| `mx_tune::scan()` diverges from `run()` detection logic | Phase 2 onward | Keep both paths calling the same `_detector->get_pitch()` — no duplicated algorithm code |
+| ARA behaviour differences between DAWs | Phase 1 validation | Test selection-based vs. track-based ARA in Logic Pro AND Reaper before Phase 2 |
+
+---
+
+## 9. CI / Build Changes Summary
+
+Changes required specifically for ARA (on top of the already-merged JUCE 8 upgrade):
+
+| File | Change |
+|:---|:---|
+| `.github/workflows/release.yml` | Add submodule checkout step for `third_party/ARA_SDK` |
+| `.github/workflows/pr-build.yml` | Same as above |
+| `CMakeLists.txt` | Add `IS_ARA_EFFECT` + `juce_set_ara_sdk_path` to `juce_add_plugin` |
+| `.gitmodules` | Add `third_party/ARA_SDK` submodule entry |
+| `src/mx_tune.h` / `src/mx_tune.cpp` | Add `scan()` method (§3.2) |
+
+---
+
+## 10. Future Expansions (Post-ARA Stable)
+
+- **Time-stretching:** `librubberband` is already linked in `src/`. Once ARA
+  clip boundaries are stable, expose drag handles in the editor that call
+  `RubberBandStretcher` directly rather than through `processBlock`.
+- **Polyphonic ghost notes:** ARA full-document access allows reading
+  correction data from sibling MXTune instances in the same session, enabling
+  neighbouring vocal lines as semi-transparent pitch-grid overlays.
+
+---
+
+## 11. Immediate Next Steps (Ordered)
+
+1. **Complete the JUCE 8 upgrade first** — follow `JUCE8_UPGRADE_PLAN.md` in
+   full and merge to `master` before touching anything below.
+2. Run `git submodule add https://github.com/Celemony/ARA_SDK third_party/ARA_SDK`.
+3. Verify the ARA CMake flag names against JUCE 8's `JUCEUtils.cmake` (§4.3 grep).
+4. Create branch `feature/ara-phase1` off the JUCE-8 `master` and implement
+   the Phase 1 handshake.
