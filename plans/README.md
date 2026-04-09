@@ -1,7 +1,5 @@
 # MXTune — Plans Index
 
-Plans must be executed in order. Each plan is a hard prerequisite for the next.
-
 ---
 
 ## Execution Order
@@ -11,6 +9,9 @@ Plans must be executed in order. Each plan is a hard prerequisite for the next.
 | 1 | [JUCE 8 Upgrade](01_JUCE8_UPGRADE.md) | `feature/juce8-upgrade` | Pending | ~1 week |
 | 2 | [ARA Implementation](02_ARA_IMPLEMENTATION.md) | `feature/ara-phase*` | Pending | ~12 weeks |
 | 3 | [ARA Testing](03_ARA_TESTING.md) | runs alongside plan 2 | Pending | ongoing |
+| 4 | [UI Modernization](04_UI_MODERNIZATION/04_UI_MODERNIZATION.md) | `feature/ui-modernization` | Pending | ~4 weeks |
+
+> Plan 4 can be designed in parallel with plans 1–2, but must be implemented on JUCE 8 after plan 1 is merged.
 
 ---
 
@@ -32,13 +33,11 @@ Key changes:
 **Target:** Migrate from real-time `processBlock` scanning to full-clip offline analysis via JUCE 8 ARA.
 **Prerequisite:** Plan 01 merged to `master`.
 
-Four phases:
 | Phase | Goal | Duration |
 |:------|:-----|:---------|
 | 1 — ARA Handshake | Plugin registers as ARA in Logic Pro / Studio One | ~2 weeks |
 | 2 — Offline Scanning | Full-clip pitch data via `ARAAudioSourceReader`, no playback needed | ~3 weeks |
 | 3 — Enhanced Metadata | Vibrato extraction and transient detection stored in ARA document model | ~3 weeks |
-| 4 — Modernized UI | Hardware-accelerated pitch grid (Metal/Direct2D), smooth animations | ~4 weeks |
 
 Key pre-implementation code changes required in `src/`:
 - Add `mx_tune::scan()` — detection-only path, no pitch shifting
@@ -50,7 +49,7 @@ Non-ARA hosts (Ableton, FL Studio) fall back to existing `processBlock` path aut
 
 ### 03 — ARA Testing
 **Target:** Validate correctness and stability of the ARA implementation across DSP edge cases, host behaviours, and UI stress conditions.
-**Runs:** Alongside and after Plan 02 phases.
+**Runs:** Alongside and after Plan 02.
 
 Test categories:
 - **DSP unit tests** — sine sweep, static note, noise rejection, sibilance (DAW-independent)
@@ -58,3 +57,17 @@ Test categories:
 - **Timeline layout** — item split, crossfade, slip edit, reverse, empty gaps (Reaper gauntlet)
 - **Vocal-specific** — vibrato, formant shift, micro-scoops, metal screams
 - **UI/UX stress** — zoom, high DPI, undo/redo, offline render, multi-instance torture tests
+
+---
+
+### 04 — UI Modernization
+**Target:** Replace the raw-colour JUCE 7 UI with a cohesive design system matching professional DAW plugins (FabFilter, iZotope, Melodyne aesthetic).
+**Prerequisite:** Plan 01 merged to `master` (requires JUCE 8 Metal/Direct2D backends).
+
+See **[04_UI_MODERNIZATION/](04_UI_MODERNIZATION/04_UI_MODERNIZATION.md)** for the full spec including reference mockup, colour tokens, typography, layout breakdown, and implementation steps.
+
+Key deliverables:
+- `MXTuneTheme.h` — design token constants (colours, spacing, radii)
+- `MXTuneLookAndFeel` — custom JUCE LookAndFeel (pill toggles, flat sliders, styled buttons)
+- Pitch grid repaint — alternating row shading, blob glow, pitch lines above blobs
+- Status bar — live pitch, cents offset, zoom, time position

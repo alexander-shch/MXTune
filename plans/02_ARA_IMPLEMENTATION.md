@@ -303,18 +303,17 @@ void MXTunePlaybackRegionRenderer::renderPlaybackRegion(...)
   the same `ARAAudioSourceReader` pass to mark syllable boundaries. These
   become snap points for Phase 4's time-stretch drag handles.
 
-### Phase 4 — Modernized UI (~4 weeks)
+### Phase 4 — UI Integration (~2 weeks)
 
-**Goal:** Hardware-accelerated pitch grid and waveform overlay in the ARA
-editor view.
+**Goal:** Wire the ARA editor view into the modernized UI (see
+`04_UI_MODERNIZATION/04_UI_MODERNIZATION.md`).
 
-- **Metal / Direct2D:** Enabled automatically by JUCE 8 when the component
-  tree is properly separated from the headless processor. No extra flags.
-- **New animation module:** Replace any `ComponentAnimator` usage in
-  `PluginEditor.cpp` with JUCE 8's cubic-bezier `juce::Animator` for smooth
-  note-snap transitions.
-- **Dynamic timeline scaling:** Respond to host zoom via
-  `ARAEditorView::onUpdatePlaybackRegionProperties()`.
+- Implement `ARAEditorView::onUpdatePlaybackRegionProperties()` to respond to
+  host zoom and clip changes, driving repaints of the pitch grid.
+- Ensure the `MXTuneLookAndFeel` and layout system from Plan 04 are applied
+  inside the ARA editor view without duplication.
+- **New animation module:** Use JUCE 8's cubic-bezier `juce::Animator` for
+  smooth note-snap transitions.
 
 ---
 
