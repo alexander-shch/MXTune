@@ -14,7 +14,7 @@ See the [CHANGELOG.md](./CHANGELOG.md) for a history of features and bugfixes.
 
 ## Download
 
-> Stable releases for macOS, Windows, and Linux are published automatically on every merge to `master`.
+> Stable releases for macOS, Windows, and Linux are published on each version tag push.
 
 | Platform | Download |
 |---|---|
@@ -78,21 +78,9 @@ Prerequisites: GCC, CMake, pkg-config, and development headers for FFTW, SoundTo
 
 ## Roadmap
 
-### Phase 1: ARA Integration (In progress)
-MXTune is transitioning to **ARA (Audio Random Access)** support to enable full-track audio access and offline analysis, moving beyond real-time buffer-limited scanning.
+The next major milestone is **ARA (Audio Random Access)** support, enabling full-clip pitch analysis without requiring the host to play audio through the plugin. This will be the foundation for vibrato control, syllable time-stretching, and multi-instance pitch grid overlays.
 
-**Key improvements:**
-- Full-track pitch analysis regardless of playhead position
-- Foundation for advanced editing features: vibrato control, phrase/syllable timing, tempo detection, and beat alignment
-
-**Upcoming phases:**
-- Phase 2: Full-track analysis pipeline
-- Phase 3: Vibrato correction and control
-- Phase 4: Phrase/syllable time-stretch editing
-- Phase 5: Tempo detection and beat alignment
-- Phase 6: Multi-host optimization and stabilization
-
-For detailed implementation roadmap, milestones, gotchas, and feature specs, see [plans/ARA_IMPLEMENTATION_PLAN.md](./plans/ARA_IMPLEMENTATION_PLAN.md).
+For the full execution plan, phase breakdown, and testing strategy, see **[plans/](./plans/README.md)**.
 
 ---
 
