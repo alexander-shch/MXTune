@@ -134,7 +134,7 @@ picks this up in `processBlock` or via `juce::AsyncUpdater`.
 **This must be completed and merged before any work in this plan begins.**
 
 All JUCE version bump details, VST3 SDK removal, CMake version change, and
-verification steps are documented separately in **`JUCE8_UPGRADE_PLAN.md`**.
+verification steps are documented separately in **`01_JUCE8_UPGRADE.md`**.
 Start ARA work only from a `master` branch that is already on JUCE 8.
 
 ### 4.2 ARA SDK as Git Submodule
@@ -155,7 +155,7 @@ configuration):
   run: git submodule update --init --recursive
 ```
 
-### 4.6 ARA CMake Configuration
+### 4.3 ARA CMake Configuration
 
 Before adding arguments, **verify the exact flag names** by searching in your
 local JUCE 8 checkout:
@@ -371,9 +371,9 @@ Changes required specifically for ARA (on top of the already-merged JUCE 8 upgra
 
 ## 11. Immediate Next Steps (Ordered)
 
-1. **Complete the JUCE 8 upgrade first** — follow `JUCE8_UPGRADE_PLAN.md` in
+1. **Complete the JUCE 8 upgrade first** — follow `01_JUCE8_UPGRADE.md` in
    full and merge to `master` before touching anything below.
 2. Run `git submodule add https://github.com/Celemony/ARA_SDK third_party/ARA_SDK`.
-3. Verify the ARA CMake flag names against JUCE 8's `JUCEUtils.cmake` (§4.3 grep).
+3. Verify the ARA CMake flag names against JUCE 8's `JUCEUtils.cmake` — see §4.3.
 4. Create branch `feature/ara-phase1` off the JUCE-8 `master` and implement
    the Phase 1 handshake.

@@ -1,7 +1,7 @@
 # JUCE 8 Upgrade Plan
 
 > Prerequisite for ARA work. Must be completed and merged to `master` before
-> any ARA implementation begins. See `ARA_IMPLEMENTATION_PLAN.md`.
+> any ARA implementation begins. See `02_ARA_IMPLEMENTATION.md`.
 
 ---
 
