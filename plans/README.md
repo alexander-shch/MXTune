@@ -10,8 +10,10 @@
 | 2 | [ARA Implementation](02_ARA_IMPLEMENTATION.md) | `feature/ara-phase*` | Pending | ~12 weeks |
 | 3 | [ARA Testing](03_ARA_TESTING.md) | runs alongside plan 2 | Pending | ongoing |
 | 4 | [UI Modernization](04_UI_MODERNIZATION/04_UI_MODERNIZATION.md) | `feature/ui-modernization` | Pending | ~4 weeks |
+| 5 | [Dev Tooling](05_DEV_TOOLING.md) | directly to `master` | Pending | ~1 day |
 
 > Plan 4 can be designed in parallel with plans 1–2, but must be implemented on JUCE 8 after plan 1 is merged.
+> Plan 5 should be done immediately after plan 1, before starting ARA work.
 
 ---
 
@@ -57,6 +59,19 @@ Test categories:
 - **Timeline layout** — item split, crossfade, slip edit, reverse, empty gaps (Reaper gauntlet)
 - **Vocal-specific** — vibrato, formant shift, micro-scoops, metal screams
 - **UI/UX stress** — zoom, high DPI, undo/redo, offline render, multi-instance torture tests
+
+---
+
+### 05 — Dev Tooling
+**Target:** Replace the manual build→copy→restart-DAW loop with a one-command dev cycle.
+**Prerequisite:** Plan 01 merged to `master`.
+
+Key changes:
+- `COPY_PLUGIN_AFTER_BUILD TRUE` in `juce_add_plugin()` — auto-copies plugin after every build
+- Build JUCE `AudioPluginHost` from extras — relaunches in ~1s vs Reaper's full scan
+- `scripts/dev.sh` — builds and relaunches the host with MXTune pre-loaded
+
+See **[05_DEV_TOOLING.md](05_DEV_TOOLING.md)** for full setup details and a "when to use what" guide.
 
 ---
 
